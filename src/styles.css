@@ -3837,9 +3837,21 @@
  * visibly going away is what tells you the list continues.
  */
 .sheet-head-fade {
-  /* How far the band hangs below the header box. Reserved by the scroller, so
-     this is also the extra clearance the first row gets. */
-  --sheet-head-rise: calc(2 * var(--sheet-gutter));
+  /**
+   * How far the band hangs below the header box. Reserved by the scroller, so
+   * this is also the extra clearance the first row gets.
+   *
+   * **Zero, down from two gutters.** The rise was room for the ramp to be soft,
+   * and at rest it was 40px of nothing: measured at 375pt, the first row sat
+   * 65px under the title in a sheet against 25px under the title on the page,
+   * and the add sheet opened on a band of empty ground between "Add Food" and
+   * its three routes. The band is the header's own 84px, which is run-in
+   * enough — the ramp below keeps its shape, measured from the header's
+   * bottom edge instead of from a line 40px under it — and the first row now
+   * rests one gutter under the header box, the same relation every screen's
+   * first card has to its title.
+   */
+  --sheet-head-rise: 0px;
   /* Band bottom up to full sheet colour — the rise plus the header's own bottom
      gutter plus one more, so the title's top half never has content behind it. */
   --sheet-head-ramp: calc(var(--sheet-head-rise) + 2 * var(--sheet-gutter));
