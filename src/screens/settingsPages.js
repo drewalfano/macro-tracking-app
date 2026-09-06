@@ -23,11 +23,12 @@ import {
   labelledField,
   notice,
   rowChevron,
+  switchRow,
 } from '../lib/ui.js'
-import { round } from '../lib/format.js'
+import { round, pluralize } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
-import { getAiKey, setAiKey, clearAiKey } from '../lib/aiKey.js'
+import { getAiKey, setAiKey, clearAiKey, getAiMode, setAiMode } from '../lib/aiKey.js'
 import { VERSION, BUILD_ID, REPO_URL } from '../config.js'
 import { readViewport, formatViewport, readCaptures } from '../lib/viewportProbe.js'
 
@@ -292,10 +293,34 @@ export function aiDescribeScreen() {
 
       const clearKeySlot = h('div', { class: 'empty:hidden' })
 
+      /**
+       * The switch is what turns sending on. The key is not.
+       *
+       * It sits in a slot so it is only on screen when there is a key for it
+       * to mean anything — a switch that can be flipped with nothing behind it
+       * would be a promise the sheet cannot keep. Off is the default for every
+       * key, including keys saved before the switch existed: a key was pasted
+       * to make sending possible, and the switch is where it is made to happen.
+       */
+      const sendSlot = h('div', { class: 'empty:hidden' })
+      const sendSwitch = () =>
+        switchRow({
+          label: 'Send unmatched foods to Gemini',
+          hint:
+            'When Describe cannot place a food in your library, the staples table or ' +
+            'Open Food Facts, it sends just those words. Nothing else leaves the phone.',
+          checked: getAiMode() === 'on',
+          onChange: (on) => {
+            setAiMode(on ? 'on' : 'off')
+            toast(on ? 'Describe will ask Gemini' : 'Describe stays on this phone')
+          },
+        })
+
       function syncKey() {
         const draft = keyDraft.trim()
         saveKeyBtn.disabled = !draft || draft === storedKey
         clearKeySlot.replaceChildren(...(storedKey ? [clearKeyBtn] : []))
+        sendSlot.replaceChildren(...(storedKey ? [card(h('div', { class: 'p-[20px]' }, sendSwitch()))] : []))
       }
       syncKey()
 
@@ -303,17 +328,30 @@ export function aiDescribeScreen() {
         'AI Describe',
         h(
           'div',
-          { class: 'flex flex-col gap-[10px]' },
-          labelledField({
-            label: 'API key',
-            hint:
-              'Without a key, AI Describe still reads what it can and matches it against ' +
-              'your foods. The key is for the rest: dishes with no entry anywhere, and ' +
-              'wording the rules will not split.',
-            children: keyField,
-          }),
-          saveKeyBtn,
-          clearKeySlot
+          { class: 'flex flex-col gap-[20px]' },
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+            labelledField({
+              label: 'API key',
+              hint:
+                'Without a key, Describe still reads what it can and matches it against ' +
+                'your foods, the staples table and Open Food Facts. The key is for the rest: ' +
+                'dishes with no entry anywhere, and wording the rules will not split.',
+              children: keyField,
+            }),
+            saveKeyBtn,
+            clearKeySlot
+          ),
+          sendSlot,
+          h(
+            'p',
+            { class: 'px-0 text-[12px] leading-snug text-muted' },
+            'What is sent is the exact words of the foods that could not be placed, and ' +
+              'nothing else: no date, no targets, no history, none of the foods that were ' +
+              'placed. The key travels in the request header to Google and is never stored ' +
+              'anywhere but this phone. It is not included in a backup.'
+          )
         )
       )
     },
@@ -366,13 +404,15 @@ function openImportSheet(data) {
       const body = h('div', { class: 'flex flex-col gap-[20px]' })
 
       async function paint() {
-        let counts
+        let preview
         try {
-          counts = await previewImport(data, mode)
+          preview = await previewImport(data, mode)
         } catch (err) {
           body.replaceChildren(notice(err.message, { iconName: 'alert' }))
           return
         }
+        const { counts, duplicates, settings } = preview
+        const collapsed = Object.values(duplicates).reduce((n, d) => n + d, 0)
 
         const rows = Object.entries(counts).map(([store, c]) =>
           h(
@@ -393,6 +433,27 @@ function openImportSheet(data) {
             )
           )
         )
+
+        /**
+         * Settings are a row of their own, because they are the one thing the
+         * two modes treat differently and the notice above only says so in
+         * prose. On a replace the row says what happens to them; on a merge it
+         * is left off, since nothing happens.
+         */
+        if (mode === 'replace') {
+          rows.push(
+            h(
+              'div',
+              { class: 'row' },
+              h('div', { class: 'flex-1 text-[14px] font-semibold' }, 'Settings'),
+              h(
+                'div',
+                { class: 'text-right text-[12px] leading-tight text-muted' },
+                settings.applied ? 'replaced from the file' : 'not in the file, kept as they are'
+              )
+            )
+          )
+        }
 
         // Same null-child trap: an export taken before `exportedAt` existed
         // would otherwise put the word "null" under the preview.
@@ -416,6 +477,16 @@ function openImportSheet(data) {
             { iconName: mode === 'replace' ? 'alert' : 'info' }
           ),
           card(rows),
+          // Two rows with one id are one row once written, and the count above
+          // already says so. This says why it is smaller than the file.
+          collapsed
+            ? h(
+                'p',
+                { class: 'px-0 text-[12px] text-muted' },
+                `${pluralize(collapsed, 'row')} in the file ${collapsed === 1 ? 'repeats' : 'repeat'} ` +
+                  'an earlier one and will be counted once, keeping the later copy.'
+              )
+            : null,
           data.exportedAt
             ? h(
                 'p',

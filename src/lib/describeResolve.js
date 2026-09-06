@@ -114,17 +114,40 @@ export function offLooksRight(phrase, draft) {
 }
 
 /**
+ * The phrase with its last word made singular, or null when that changes nothing.
+ *
+ * "Two eggs" is written as eggs and the staples table lists an egg, and the
+ * library search wants every term to appear in the name — so the plural was a
+ * miss on the commonest food anyone describes. Only the last word is touched:
+ * it is the head noun, and "dried apricots" should become "dried apricot", not
+ * "dry apricot". The same single inflection `offLooksRight` undoes.
+ */
+export function singular(phrase) {
+  const words = String(phrase || '').trim().split(/\s+/)
+  const last = words[words.length - 1] || ''
+  const one = last.length > 3 ? last.replace(/ies$/, 'y').replace(/(sh|ch|ss|x)es$/, '$1').replace(/s$/, '') : last
+  if (one === last) return null
+  return [...words.slice(0, -1), one].join(' ')
+}
+
+/**
  * @returns {Promise<{source: 'library'|'staple'|'off', food?: object, draft?: object}|null>}
  */
 export async function resolvePhrase(phrase, { signal } = {}) {
   const text = String(phrase || '').trim()
   if (!text) return null
 
-  const [found] = await searchFoods(text, 1)
-  if (found) return { source: 'library', food: found }
-
-  const [staple] = await searchStaples(text, 1)
-  if (staple) return { source: 'staple', draft: { ...stapleDraft(staple), name: stapleName(staple) } }
+  // The phrase as written, then its singular, against each local source in
+  // turn: a library hit on the singular still beats a staple hit on the plural.
+  const forms = [text, singular(text)].filter(Boolean)
+  for (const form of forms) {
+    const [found] = await searchFoods(form, 1)
+    if (found) return { source: 'library', food: found }
+  }
+  for (const form of forms) {
+    const [staple] = await searchStaples(form, 1)
+    if (staple) return { source: 'staple', draft: { ...stapleDraft(staple), name: stapleName(staple) } }
+  }
 
   if (!isOnline()) return null
 
@@ -189,7 +212,19 @@ async function toPlateItem(item, { signal }) {
   const resolved = await resolvePhrase(item.food, { signal })
 
   if (!resolved) {
-    return { name: item.food, text: item.text, phrase: amountPhrase(item) }
+    /**
+     * The amount travels with the words, so that a food picked for this row
+     * later — by hand, in the search — arrives already measured. "Two eggs"
+     * that resolved to nothing still said two; only a vague amount is left
+     * as the blank it is.
+     */
+    return {
+      name: item.food,
+      text: item.text,
+      phrase: amountPhrase(item),
+      quantity: hasUsableQuantity(item) ? item.quantity : null,
+      unit: item.unit,
+    }
   }
 
   const record = resolved.food || resolved.draft

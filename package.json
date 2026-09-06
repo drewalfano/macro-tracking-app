@@ -9,7 +9,7 @@
     "build": "node scripts/make-icons.mjs && vite build",
     "preview": "vite preview",
     "serve": "npm run build && vite preview --host --port 4173",
-    "test": "node test/math.test.mjs && node test/describe.test.mjs",
+    "test": "node test/math.test.mjs && node test/describe.test.mjs && node test/sw.test.mjs && node test/backup.test.mjs",
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.14",
+    "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4.1.14",
     "vite": "^7.1.9"
   }

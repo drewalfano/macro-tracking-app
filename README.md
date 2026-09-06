@@ -25,7 +25,7 @@ path, so the URL is `http://localhost:5173/trackd/`.
 | `npm run dev` | Vite dev server |
 | `npm run build` | Generates icons, then builds to `dist/` |
 | `npm run preview` | Serves the production build |
-| `npm test` | Macro arithmetic, sanity flags, trend smoothing, local dates |
+| `npm test` | Macro arithmetic, the Describe parser and draft, the service worker lifecycle, backup validation and import |
 | `npm run icons` | Regenerates the PWA icons into `public/icons/` |
 
 ## Getting it onto the phone
@@ -87,6 +87,12 @@ src/
   state.js           the only cross-screen state: which day you are looking at
   lib/
     db.js            IndexedDB, every read and write, plus export/import
+    backup.js        what an export has to look like before import writes it
+    describeRules.js the rules parser: a sentence into foods and amounts
+    describeResolve.js  library, staples, Open Food Facts, in that order
+    describeDraft.js the review's own rules: re-reads, replies, what blocks the log
+    describeModel.js the one Gemini call, and the only file that knows the model
+    aiKey.js         the key, and the separate switch that allows sending
     compute.js       macro arithmetic, Atwater, the sanity flags from spec 9
     off.js           Open Food Facts client; normalizes everything on ingest
     trend.js         weight smoothing and rate of change
@@ -95,15 +101,27 @@ src/
     sheet.js         bottom sheet with a panel stack and history integration
     dom.js           ~100 lines of DOM helper: h(), swipe, long press, count-up
   screens/           today, log, history, weight, settings, foods
-  sheets/            addFood, serving, search, custom, scan
+  sheets/            addFood, describe, plate, serving, search, custom, scan
   sw.template.js     service worker; vite.config.js stamps in the asset list
+scripts/
+  cacheVersion.mjs   the worker's cache name, a hash of everything it caches
 ```
 
 ### Dependencies
 
-Three, deliberately: `idb`, `@zxing/browser`, `@zxing/library`. ZXing is loaded
+Three, deliberately: `idb`, `@zxing/browser`, `@zxing/library`. (`fake-indexeddb`
+is a dev dependency only, so the import tests run against real transaction
+semantics rather than a stub.) ZXing is loaded
 dynamically and only when you open the Scan route, so it stays out of the
 initial bundle.
+
+The service worker keeps one shell cache per build, named by a hash of the
+bundle, the document, the manifest and the icons. An install that cannot fetch
+every required file fails and throws its half-built cache away, so the previous
+version keeps serving; old caches are deleted only once the new one is verified
+whole. The document and its assets are both answered from that one cache, so
+the page can never be one build and its scripts another. A new build is offered
+with a toast and installed only when Update is tapped.
 
 `vite-plugin-pwa` was evaluated and dropped. It pulls in 300+ packages and,
 today, eight high-severity build-time advisories to do an app-shell precache and
@@ -134,12 +152,53 @@ Two additions to the original spec, both forced by behaviour it asked for:
   prefilled", and the alternative is scanning the entries index every time the
   add sheet opens — the one place latency is unacceptable.
 
+## Describing a meal
+
+Describe takes a sentence — "two eggs on toast and a black coffee" — and turns
+it into rows you can check and log. One sheet, three states: write it, review
+it, log it. Every correction happens on the row it is about; the only thing
+that ever opens on top is the food search.
+
+What reads the sentence, in order: the rules parser in
+[`describeRules.js`](src/lib/describeRules.js), then your library, then the
+bundled staples table, then Open Food Facts. All of that runs without a key.
+A food that none of them can place arrives as a row that says so and offers
+the search.
+
+### What leaves the phone, and when
+
+Nothing, unless you have said so. Two things have to be true before Describe
+sends anything to Gemini: a Google AI Studio key is saved in Settings → AI
+Describe, **and** the switch under it, "Send unmatched foods to Gemini", is
+on. The switch is off for every key, including keys saved before it existed.
+With a key and no decision, the sheet asks once — the first time it has
+something it would send — and remembers the answer either way.
+
+When sending is on, what goes is the exact words of the foods that could not
+be placed locally, and nothing else: no date, no targets, no history, none of
+the foods that were placed. The reply is put back through the local
+resolution before any estimate counts, so a dish the model names that your
+library already has takes your numbers, not its guess. Estimates are marked
+with a sparkle on the row, in the log, and in every export.
+
+The key lives in `localStorage`, travels in the header of that one request,
+and is never included in a backup. See [`aiKey.js`](src/lib/aiKey.js) and
+[`describeModel.js`](src/lib/describeModel.js).
+
 ## Backups
 
 Export is the only backup. Clearing the browser's site data deletes everything,
 and nothing is stored anywhere else. Settings → Data → Export data writes a
 single JSON file with every store; import offers merge or replace with a preview
 of exactly what will change first.
+
+Every record in the file is checked before anything is written —
+[`backup.js`](src/lib/backup.js) — and a file that fails is refused whole,
+with the row and the reason, rather than partly imported. Older exports with
+stores that did not exist yet are fine; a file from a newer version of the app
+is refused with a message saying so. A replace is one transaction: if a write
+fails partway, IndexedDB rolls it back and what was on the device is still
+there.
 
 ## Open questions, resolved
 

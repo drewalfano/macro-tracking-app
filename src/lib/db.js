@@ -6,9 +6,22 @@
 import { openDB } from 'idb'
 import { addDays, todayStr } from './dates.js'
 import { weightUnitFor } from './format.js'
+import {
+  EXPORT_FORMAT,
+  SCHEMA_VERSION,
+  DATA_STORES,
+  keyPathFor,
+  validateImport as checkImport,
+} from './backup.js'
 
 export const DB_NAME = 'macro-tracker'
-export const DB_VERSION = 2
+/**
+ * Declared in backup.js, because it is as much the version of the export
+ * format as of the database — a file is readable exactly when its version is
+ * no newer than this.
+ */
+export const DB_VERSION = SCHEMA_VERSION
+export { EXPORT_FORMAT }
 
 /**
  * What onboarding fills in. Every field is null until someone says otherwise,
@@ -65,12 +78,6 @@ export const DEFAULT_SETTINGS = {
   favourites: [],
   firstRunSeen: false,
 }
-
-/** Everything that travels in an export. Order matters only for readability. */
-const DATA_STORES = ['foods', 'entries', 'meals', 'weights', 'dayTargets']
-
-/** Two stores are keyed by date rather than by a generated id. */
-const keyPathFor = (store) => (store === 'weights' || store === 'dayTargets' ? 'date' : 'id')
 
 export const uid = () =>
   crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
@@ -965,8 +972,6 @@ export async function moveFavourite(index, delta) {
 
 /* ------------------------------------------------------------ export/import */
 
-export const EXPORT_FORMAT = 'macro-tracker-export'
-
 export async function exportAll() {
   const d = await db()
   const rows = await Promise.all(DATA_STORES.map((store) => d.getAll(store)))
@@ -980,28 +985,31 @@ export async function exportAll() {
   }
 }
 
+/**
+ * The whole check lives in backup.js; this is the one place db.js runs it.
+ * Everything below writes what THIS returns and never the raw file, so the
+ * preview and the commit are looking at the same rows.
+ */
 export function validateImport(data) {
-  if (!data || typeof data !== 'object') throw new Error('That file is not valid JSON.')
-  if (data.format !== EXPORT_FORMAT) {
-    throw new Error('That file was not exported from Trackd.')
-  }
-  // A store missing entirely is fine — an export taken before it existed.
-  for (const key of DATA_STORES) {
-    if (data[key] && !Array.isArray(data[key])) throw new Error(`The "${key}" data is malformed.`)
-  }
-  return true
+  return checkImport(data)
 }
 
-/** What a merge or replace would actually change, shown before committing. */
+/**
+ * What a merge or replace would actually change, shown before committing.
+ *
+ * Counted from the validated, de-duplicated rows — the exact set `importAll`
+ * writes — so the numbers on the preview are the numbers that land. A row the
+ * file listed twice is counted once here and once in `duplicates`.
+ */
 export async function previewImport(data, mode) {
-  validateImport(data)
+  const checked = validateImport(data)
   const d = await db()
   const counts = {}
   for (const store of DATA_STORES) {
-    const incoming = data[store] || []
+    const incoming = checked.stores[store]
     const existingKeys = new Set(await d.getAllKeys(store))
     const key = keyPathFor(store)
-    const overlapping = incoming.filter((r) => existingKeys.has(r?.[key])).length
+    const overlapping = incoming.filter((r) => existingKeys.has(r[key])).length
     counts[store] = {
       existing: existingKeys.size,
       incoming: incoming.length,
@@ -1011,32 +1019,66 @@ export async function previewImport(data, mode) {
       after: mode === 'replace' ? incoming.length : existingKeys.size + (incoming.length - overlapping),
     }
   }
-  return counts
+  return {
+    counts,
+    duplicates: checked.duplicates,
+    version: checked.version,
+    // Settings only come across on a replace. Merging someone else's targets
+    // into a live app is a surprise nobody asked for.
+    settings: { present: checked.settings != null, applied: mode === 'replace' && checked.settings != null },
+  }
 }
 
+/**
+ * Write a backup in, whole or not at all.
+ *
+ * Validation runs first and throws before the transaction is opened, so a bad
+ * file never touches the store. Everything after that is one readwrite
+ * transaction across every store: a `put` that fails — a quota hit, a value
+ * the structured clone refuses — aborts the transaction and IndexedDB rolls
+ * back every clear and every put in it, so the data that was there is still
+ * there. The in-memory caches are only dropped once `tx.done` has resolved,
+ * for the same reason: a failed write must leave the screens showing what is
+ * actually on disk, which is what they were showing before.
+ */
 export async function importAll(data, mode = 'merge') {
-  validateImport(data)
+  const checked = validateImport(data)
   const d = await db()
   const stores = [...DATA_STORES, 'settings']
 
   await write(async () => {
     const tx = d.transaction(stores, 'readwrite')
-    if (mode === 'replace') {
-      for (const store of stores) tx.objectStore(store).clear()
-    }
-    for (const store of DATA_STORES) {
-      const rows = data[store] || []
-      for (const row of rows) {
-        if (!row || typeof row !== 'object') continue
-        tx.objectStore(store).put(store === 'foods' ? withSearchKey(row) : row)
+    /**
+     * Every request is kept and awaited, not fired and forgotten. `idb` hands
+     * each one back as a promise, and a transaction that aborts rejects all
+     * of them — a rejection nobody is listening to is an error the page
+     * cannot report and Node refuses to run past.
+     */
+    const requests = []
+    try {
+      if (mode === 'replace') {
+        for (const store of stores) requests.push(tx.objectStore(store).clear())
       }
+      for (const store of DATA_STORES) {
+        for (const row of checked.stores[store]) {
+          requests.push(tx.objectStore(store).put(store === 'foods' ? withSearchKey(row) : row))
+        }
+      }
+      if (mode === 'replace' && checked.settings) {
+        requests.push(tx.objectStore('settings').put(checked.settings, 'settings'))
+      }
+    } catch (err) {
+      // A synchronous throw from `put` (a value that cannot be cloned) has not
+      // aborted the transaction yet; do it, so nothing before it commits.
+      try {
+        tx.abort()
+      } catch {
+        /* already aborting */
+      }
+      await Promise.allSettled([...requests, tx.done])
+      throw err
     }
-    // Settings only come across on a replace. Merging someone else's targets
-    // into a live app is a surprise nobody asked for.
-    if (mode === 'replace' && data.settings) {
-      tx.objectStore('settings').put(data.settings, 'settings')
-    }
-    await tx.done
+    await Promise.all([...requests, tx.done])
   })
 
   settingsCache = null

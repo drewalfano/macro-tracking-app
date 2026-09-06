@@ -19,6 +19,7 @@ import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
 import { quickLogFood, defaultServing } from '../lib/logging.js'
 import { toast } from '../lib/toast.js'
 import { openEditEntry, openServingSheet } from '../sheets/serving.js'
+import { openDescribe } from '../sheets/describe.js'
 import { openLogSheet } from '../sheets/log.js'
 import { openSheet } from '../lib/sheet.js'
 import { datePickerPanel } from '../lib/datePicker.js'
@@ -959,19 +960,61 @@ function quickAddTile(food, { date, block }) {
  * screen keeps being cleared of: motion is a claim that something changed, and
  * nothing here did. The log fades because the log is a different day's entries.
  */
-function quickAddSection({ foods, firstRun, date, block }) {
-  if (!foods.length && !firstRun) return null
+/**
+ * **No rail, no section.** It used to render a "Quick add" heading over a
+ * one-line card reading "Tap + to log your first food" on first run, which
+ * was a section announcing it had nothing in it, sitting above a second card
+ * announcing the same thing. First run is one state, and it is said once, in
+ * the log's place — see `firstMealCard`. The rail appears the moment there is
+ * a food to put in it, which is the moment the first meal is logged.
+ */
+function quickAddSection({ foods, date, block }) {
+  if (!foods.length) return null
 
   return h(
     'section',
     { class: 'flex flex-col gap-[10px]' },
     h('div', { class: 'section-head' }, h('div', { class: 'section-label' }, 'Quick add')),
-    foods.length
-      ? h('div', { class: 'food-rail' }, foods.map((food) => quickAddTile(food, { date, block })))
-      : // Points at the FAB rather than describing the app. The button is the
-        // only thing on this screen that does anything at zero, and it is 20px
-        // from where the sentence sits.
-        card(emptyRow('Tap + to log your first food'))
+    h('div', { class: 'food-rail' }, foods.map((food) => quickAddTile(food, { date, block })))
+  )
+}
+
+/**
+ * The first-use state: one card, one thing to do.
+ *
+ * Before anything has ever been logged the screen held two empty cards, each
+ * a muted line pointing at the `+` in the corner. Neither did anything, and
+ * between them they made a fresh install read as a screen that had failed to
+ * load. This is the one card that replaces both: it says what the screen is
+ * for, and it holds the action rather than pointing at one.
+ *
+ * The action opens Describe — a sentence is the shortest route from nothing
+ * to a logged meal, and it needs no library to draw from, which is exactly
+ * what a first run does not have. The other routes are named in the line
+ * under it and are still one tap away on the `+`.
+ *
+ * `firstRun` is the state of the whole database, not a flag: nothing has ever
+ * been logged. It goes away with the first entry and never comes back,
+ * including after an import, which is right — an imported history is a
+ * history. An empty day later on keeps its one-line "Nothing logged yet",
+ * because by then the rail above it is doing the work.
+ */
+function firstMealCard(date, block) {
+  return h(
+    'div',
+    { class: 'flex flex-col gap-[10px] px-[20px] py-[20px]' },
+    h('p', { class: 'text-[16px] font-semibold leading-tight' }, 'Nothing logged yet'),
+    h(
+      'p',
+      { class: 'text-[14px] leading-snug text-muted' },
+      'Describe what you ate in a sentence and the rings above start to fill. ' +
+        'The + button searches, scans a barcode, or takes the numbers by hand.'
+    ),
+    h(
+      'button',
+      { class: 'btn-primary mt-[10px]', onclick: () => openDescribe({ date, block }) },
+      'Log your first meal'
+    )
   )
 }
 
@@ -1239,7 +1282,6 @@ export function todayScreen() {
         railSlot,
         quickAddSection({
           foods: railFoods,
-          firstRun: everLogged === null,
           date: state.date,
           block: blockForTime(new Date(), settings.blockThresholds),
         })
@@ -1311,15 +1353,23 @@ export function todayScreen() {
                     ),
                   { dayStep }
                 )
-              : // One line, in the same card every list on this screen sits in,
-                // so an empty day has the same edges as a full one. "Nothing
-                // logged yet" and not "Your log is empty" — the heading directly
-                // above it already said the word log, and a sentence that repeats
-                // its own heading is saying one thing twice.
-                //
-                // No route into the sheet needed down here: `Full log` sits in the
-                // head above and renders at every count, including this one.
-                logCard(state.date, emptyRow('Nothing logged yet'), { dayStep })
+              : everLogged === null
+                ? // Never logged anything: the card carries the first action.
+                  // See `firstMealCard`.
+                  logCard(
+                    state.date,
+                    firstMealCard(state.date, blockForTime(new Date(), settings.blockThresholds)),
+                    { dayStep }
+                  )
+                : // One line, in the same card every list on this screen sits in,
+                  // so an empty day has the same edges as a full one. "Nothing
+                  // logged yet" and not "Your log is empty" — the heading directly
+                  // above it already said the word log, and a sentence that repeats
+                  // its own heading is saying one thing twice.
+                  //
+                  // No route into the sheet needed down here: `Full log` sits in the
+                  // head above and renders at every count, including this one.
+                  logCard(state.date, emptyRow('Nothing logged yet'), { dayStep })
         )
       )
 

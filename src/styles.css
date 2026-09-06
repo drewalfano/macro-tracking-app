@@ -4029,7 +4029,20 @@
    * of the screen — the same origin the page's own safe-area padding starts
    * from, which is what makes this land on the card's edge and not near it.
    */
-  max-height: calc(100% - env(safe-area-inset-top, 0px) - var(--content-top));
+  max-height: calc(
+    100% - env(safe-area-inset-top, 0px) - var(--content-top) - var(--kb-inset, 0px)
+  );
+  /**
+   * The bottom edge, and the keyboard.
+   *
+   * `--kb-inset` is written by lib/sheet.js from `visualViewport` and is the
+   * height of the software keyboard when one is up, zero otherwise. Lifting
+   * the edge by it keeps the footer's button above the keys, and the cap
+   * above takes the same amount off so the sheet still fits in what is left.
+   * Declared here rather than as a `bottom-0` utility on the element so the
+   * variable has one rule to land in.
+   */
+  bottom: var(--kb-inset, 0px);
   /**
    * Quad-out, not the expo-out this used to take, and it is the last surface in
    * the app to make the move.

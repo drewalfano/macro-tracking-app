@@ -1,11 +1,30 @@
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { execSync } from 'node:child_process'
+import { cacheVersion } from './scripts/cacheVersion.mjs'
 
 // Repo name on GitHub Pages. Override with BASE_PATH=/ for a custom domain.
 const base = process.env.BASE_PATH ?? '/trackd/'
+
+/**
+ * Files copied verbatim out of `public/` that the shell needs.
+ *
+ * These never appear in Rollup's bundle, so they are listed by hand, split by
+ * what happens if one of them fails to download. The manifest is required:
+ * without it the installed app has no identity. The icons are optional: the
+ * home-screen icon was copied out at install time and lives in the launcher,
+ * so a failed icon fetch costs nothing the app needs to run offline, and it
+ * must not be allowed to fail the whole install.
+ */
+const PUBLIC_REQUIRED = ['manifest.webmanifest']
+const PUBLIC_OPTIONAL = [
+  'icons/icon-192.png',
+  'icons/icon-512.png',
+  'icons/icon-maskable-512.png',
+  'icons/apple-touch-icon.png',
+]
 
 /**
  * Hand-rolled service worker build step.
@@ -15,7 +34,8 @@ const base = process.env.BASE_PATH ?? '/trackd/'
  * produced and stamp them into a template, so that's all it does.
  */
 function serviceWorker() {
-  const templatePath = resolve(process.cwd(), 'src/sw.template.js')
+  const root = process.cwd()
+  const templatePath = resolve(root, 'src/sw.template.js')
   return {
     name: 'trackd:sw',
     apply: 'build',
@@ -24,30 +44,47 @@ function serviceWorker() {
         .filter((f) => !f.endsWith('.map'))
         .map((f) => base + f)
 
-      // The shell itself, plus everything copied verbatim out of public/ —
-      // those never appear in `bundle`, so they are listed by hand.
-      const shell = [
-        base,
-        base + 'manifest.webmanifest',
-        base + 'icons/icon-192.png',
-        base + 'icons/icon-512.png',
-        base + 'icons/icon-maskable-512.png',
-        base + 'icons/apple-touch-icon.png',
-      ]
-      const precache = [...new Set([...shell, ...assets])].sort()
+      const required = [
+        ...new Set([base, ...PUBLIC_REQUIRED.map((f) => base + f), ...assets]),
+      ].sort()
+      const optional = PUBLIC_OPTIONAL.map((f) => base + f).sort()
 
-      // Content-derived version: the SW only re-installs when output changes.
-      const version = Object.values(bundle)
-        .map((c) => (c.type === 'chunk' ? c.code : c.source))
-        .join('')
-        .length.toString(36)
-
+      /**
+       * Content-derived version: the worker re-installs when, and only when,
+       * something it caches has changed. See `cacheVersion` for why a length
+       * was never a version.
+       *
+       * The parts are everything the worker will put in the shell cache: the
+       * bundle Rollup produced, the HTML template the document is built from
+       * (the built `index.html` is emitted after this hook runs, but it is a
+       * pure function of the template and the hashed asset names, both of
+       * which are in here), and every public file listed above — required and
+       * optional alike, so a redrawn icon changes the version too. The worker's
+       * own source is included so a change to the caching logic gets a fresh
+       * cache rather than inheriting one built under the old rules.
+       */
+      const parts = Object.entries(bundle)
+        .filter(([f]) => !f.endsWith('.map'))
+        .map(([f, c]) => ({ name: f, content: c.type === 'chunk' ? c.code : c.source }))
+      parts.push({ name: 'index.html', content: readFileSync(resolve(root, 'index.html')) })
       const source = readFileSync(templatePath, 'utf8')
-        .replace('__PRECACHE__', JSON.stringify(precache, null, 2))
+      parts.push({ name: 'sw.template.js', content: source })
+      for (const f of [...PUBLIC_REQUIRED, ...PUBLIC_OPTIONAL]) {
+        const path = resolve(root, 'public', f)
+        // A missing public file is a build error, not a quietly shorter hash:
+        // the worker would go on to precache a URL that 404s.
+        if (!existsSync(path)) throw new Error(`trackd:sw: public/${f} is missing`)
+        parts.push({ name: `public/${f}`, content: readFileSync(path) })
+      }
+      const version = cacheVersion(parts)
+
+      const stamped = source
+        .replace('__PRECACHE__', JSON.stringify(required, null, 2))
+        .replace('__OPTIONAL__', JSON.stringify(optional, null, 2))
         .replace('__VERSION__', JSON.stringify(version))
         .replace('__BASE__', JSON.stringify(base))
 
-      this.emitFile({ type: 'asset', fileName: 'sw.js', source })
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: stamped })
     },
   }
 }

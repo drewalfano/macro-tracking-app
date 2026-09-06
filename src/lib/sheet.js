@@ -446,7 +446,9 @@ export function openSheet({ title, render, footer = null, action = null }) {
       // `bottom-0` is safe HERE, unlike everywhere else in the app: the scrim is
       // `.screen-cover`, so this is absolute inside a box whose own height is
       // already the screen's. It is the FIXED bottom edge that was ambiguous.
-      class: 'sheet-panel absolute inset-x-0 bottom-0 flex flex-col border-t border-outline',
+      // No `bottom-0` here: `.sheet-panel` owns its bottom edge in CSS, so
+      // the keyboard inset below can move it. See `syncKeyboard`.
+      class: 'sheet-panel absolute inset-x-0 flex flex-col border-t border-outline',
       /**
        * The `max-height` that used to be written here as an inline style now
        * lives on `.sheet-panel`, since it no longer varies per sheet. Its two
@@ -766,6 +768,10 @@ export function openSheet({ title, render, footer = null, action = null }) {
     for (const entry of panels) runDisposers(entry)
     window.removeEventListener('popstate', onPop)
     document.removeEventListener('keydown', onKey)
+    if (vv) {
+      vv.removeEventListener('resize', syncKeyboard)
+      vv.removeEventListener('scroll', syncKeyboard)
+    }
     /**
      * Whether the focus we are about to strip belonged to us.
      *
@@ -912,11 +918,62 @@ export function openSheet({ title, render, footer = null, action = null }) {
   // land on. Two arguments rather than one because they used to be one element.
   swipeToDismiss(panel, { scroller: body, scrim, dim, onDismiss: () => closeAll() })
 
+  /**
+   * The software keyboard, and where the sheet's bottom edge goes when it
+   * opens.
+   *
+   * On a phone the keyboard does not resize the page. The layout viewport —
+   * `window.innerHeight`, the box every `fixed` element is placed against —
+   * stays the full screen, and the keyboard covers the bottom of it. A sheet
+   * anchored to that edge keeps its footer exactly where the keyboard now is:
+   * the primary button is under the keys, and the field being typed into may
+   * be as well. `visualViewport` is the box that DOES shrink, and the
+   * difference between the two is the keyboard's height.
+   *
+   * So the sheet's bottom edge is lifted by that difference, and its cap is
+   * reduced by the same amount so it still fits above the keys. The body
+   * scrolls inside whatever is left. On a desktop the two viewports agree and
+   * the inset is zero, so nothing here has any effect.
+   *
+   * `offsetTop` is in the sum because iOS may scroll the visual viewport up to
+   * bring a focused field into view even with the page pinned; the space below
+   * the visual viewport is what the keyboard is covering, wherever the visual
+   * viewport currently sits.
+   *
+   * Written as a CSS variable rather than a style, so the stylesheet's rule
+   * for `.sheet-panel` stays the one place its geometry is declared, and the
+   * height transition is switched off for the change: a keyboard arriving is
+   * not a panel change and must not be animated like one.
+   *
+   * **Not verified on a real phone.** There is no simulator on the machine
+   * this was written on, and a desktop browser has no keyboard to open. The
+   * arithmetic is the standard one; the reading that confirms it belongs in
+   * lib/viewportProbe.js when the phone next takes one with a sheet and the
+   * keyboard both up.
+   */
+  const vv = window.visualViewport
+  let keyboardInset = 0
+  function syncKeyboard() {
+    if (!vv || destroyed) return
+    const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+    if (inset === keyboardInset) return
+    keyboardInset = inset
+    panel.style.transition = 'none'
+    panel.style.setProperty('--kb-inset', `${inset}px`)
+    void panel.offsetHeight
+    panel.style.transition = ''
+  }
+  if (vv) {
+    vv.addEventListener('resize', syncKeyboard)
+    vv.addEventListener('scroll', syncKeyboard)
+  }
+
   window.addEventListener('popstate', onPop)
   document.addEventListener('keydown', onKey)
   document.body.appendChild(scrim)
   holdScrim()
   lockScroll(true)
+  syncKeyboard()
 
   active = { scrim, destroy, closeAll }
   pushPanel({ title, render, footer, action })

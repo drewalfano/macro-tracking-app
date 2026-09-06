@@ -6,6 +6,60 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.3.0 — Describe becomes one sheet, and the first day has one thing to do
+
+### Describe: write, review, log
+
+The old flow was a field with two buttons under it — "Make a plate" and "Send
+it all to Gemini" — that opened the plate on top, where every row wore a pencil,
+a search glyph and a cross, and every correction pushed another panel. It asked
+the person to choose a processing method before it asked what they ate.
+
+Now it is one panel with three states, and the panel never leaves. The field
+sits under a heading that asks the only question, "What did you eat?", with one
+primary action, "Review meal". The rows arrive in the same sheet: the sentence
+collapses to a summary card with "Edit description" beside it, a totals tile
+above the rows, and the rows themselves in one card. A row is a button with a
+chevron; tapping it opens its editor beneath it, and everything that can be
+done to the row — the amount, the unit, the words, the search, removal — is in
+there. Nothing is drawn on a row that has nothing to say.
+
+The footer holds one pinned action, "Log meal", and a muted line above it that
+names what is in the way when it is disabled: "1 item needs a food and 2 items
+need an amount." A food named without an amount opens ready to be answered, in
+its own words — "About how much rice?" — rather than under a label reading
+Quantity.
+
+"Save as a meal" and the plate are demoted to two chips on the totals tile,
+filling its width. They are real options, not the next thing to do.
+
+### The sheet holds still
+
+The panel asks for the whole screen and is then trimmed to exactly the
+scroller's box, so the sheet is at its cap from the first frame and stays there
+through typing, the read, the rows arriving and a row opening. The one
+movement is the content fade the app already uses for a panel whose contents
+changed. The keyboard lifts the sheet's bottom edge by its own height via
+`visualViewport` — written to the standard arithmetic and **not yet measured on
+the phone**, which is where it has to be.
+
+### Sending is a switch, not a key
+
+A stored key used to be read as permission. It is not: it is the ability. The
+switch under it in Settings → AI Describe is the permission, off for every key,
+and the sheet asks once — with both answers given equal weight — the first time
+it has something it would send. The copy under the field says which state it is
+in, in one line, every time.
+
+### Today's first day
+
+Two empty cards — "Tap + to log your first food" under a Quick add heading, and
+"Nothing logged yet" under Logged — became one card in the log's place, with
+the action in it: "Log your first meal" opens Describe. The Quick add section
+appears with the first food, which is the moment it has something to show.
+
+---
+
 ## v1.2.3 — the section heading gets a size of its own, and the log runs backwards
 
 From use — [NOTES-use-audit.md](NOTES-use-audit.md), U4: *"the full log button

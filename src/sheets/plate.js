@@ -6,7 +6,7 @@ import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
 import { logPlate, saveDraftAsMeal, mealDraftSkips, defaultServing } from '../lib/logging.js'
 import { classifyItem, itemMacros, leftoversPayload, resolveModelItems } from '../lib/describeResolve.js'
 import { describeLeftovers } from '../lib/describeModel.js'
-import { hasAiKey } from '../lib/aiKey.js'
+import { aiEnabled } from '../lib/aiKey.js'
 import { pushMatchItem } from './matchItem.js'
 import {
   blockSelector,
@@ -464,7 +464,9 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                  * something to point at. The label carries the whole
                  * disclosure: a verb, a count, and where it goes.
                  */
-                sendable.length && hasAiKey()
+                // Gated on the PREFERENCE, not the key: a key alone was
+                // never a decision to send. See `getAiMode`.
+                sendable.length && aiEnabled()
                   ? h(
                       'button',
                       {
@@ -715,64 +717,77 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
         })
       }
 
-      function openSaveAsMeal(currentItems) {
-        ctx.push({
-          title: 'Save as a meal',
-          render: (c) => {
-            let name = ''
-            // Logging is blocked while a row is unfinished; saving is not, and
-            // an unfinished row has nothing in it to save. Said here rather
-            // than in the toast afterwards, so the count is a warning instead
-            // of a receipt.
-            const skipped = mealDraftSkips(currentItems)
-            const save = h(
-              'button',
-              {
-                class: 'btn-primary',
-                disabled: true,
-                onclick: async () => {
-                  await saveDraftAsMeal(name.trim(), currentItems)
-                  c.pop()
-                  toast(`Saved "${name.trim()}"`)
-                },
-              },
-              'Save meal'
-            )
-            c.setFooter(save)
-            return h(
-              'div',
-              { class: 'flex flex-col gap-[20px]' },
-              labelledField({
-                label: 'Name',
-                hint: 'Saved meals are reusable. The plate stays as it is, and saving does not log it.',
-                children: textInput({
-                  value: '',
-                  autofocus: true,
-                  placeholder: 'Usual breakfast',
-                  onInput: (v) => {
-                    name = v
-                    save.disabled = !v.trim()
-                  },
-                }),
-              }),
-              skipped
-                ? notice(
-                    `${pluralize(skipped, 'row')} on this plate still ${
-                      skipped === 1 ? 'needs' : 'need'
-                    } a match or an amount and will not be saved. ` +
-                      'The rest of the plate becomes the meal.',
-                    { iconName: 'alert' }
-                  )
-                : null
-            )
-          },
-        })
-      }
+      const openSaveAsMeal = (currentItems) => pushSaveAsMeal(ctx, currentItems)
 
       repaintAll()
       return body
     },
   }
+}
+
+/* ---------------------------------------------------------- save as meal */
+
+/**
+ * Name a set of rows that has not been logged, and keep it.
+ *
+ * Shared between the plate and Describe: both hold a list of plate-shaped
+ * items that could be committed, and both want the same second option. It
+ * pushes onto whichever sheet it was called from.
+ *
+ * Logging is blocked while a row is unfinished; saving is not, and an
+ * unfinished row has nothing in it to save. Said here rather than in the
+ * toast afterwards, so the count is a warning instead of a receipt.
+ */
+export function pushSaveAsMeal(ctx, currentItems, { onSaved } = {}) {
+  ctx.push({
+    title: 'Save as a meal',
+    render: (c) => {
+      let name = ''
+      const skipped = mealDraftSkips(currentItems)
+      const save = h(
+        'button',
+        {
+          class: 'btn-primary',
+          disabled: true,
+          onclick: async () => {
+            save.disabled = true
+            await saveDraftAsMeal(name.trim(), currentItems)
+            c.pop()
+            toast(`Saved "${name.trim()}"`)
+            onSaved?.()
+          },
+        },
+        'Save meal'
+      )
+      c.setFooter(save)
+      return h(
+        'div',
+        { class: 'flex flex-col gap-[20px]' },
+        labelledField({
+          label: 'Name',
+          hint: 'Saved meals are reusable. Saving does not log anything.',
+          children: textInput({
+            value: '',
+            autofocus: true,
+            placeholder: 'Usual breakfast',
+            onInput: (v) => {
+              name = v
+              save.disabled = !v.trim()
+            },
+          }),
+        }),
+        skipped
+          ? notice(
+              `${pluralize(skipped, 'row')} still ${
+                skipped === 1 ? 'needs' : 'need'
+              } a match or an amount and will not be saved. ` +
+                'The rest becomes the meal.',
+              { iconName: 'alert' }
+            )
+          : null
+      )
+    },
+  })
 }
 
 /* ------------------------------------------------------------------ bar */

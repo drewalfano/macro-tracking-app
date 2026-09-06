@@ -184,6 +184,88 @@ eq('an unrelated product', offLooksRight('house salad', product('Ranch Dressing,
 eq('an empty phrase matches nothing', offLooksRight('', product('Dried Soft Apricots')), false)
 eq('a nameless product matches nothing', offLooksRight('apricots', product('')), false)
 
+/* ------------------------------------------------------------ the draft */
+
+/**
+ * The review's own rules: what a re-read keeps, where a model reply lands, and
+ * what blocks the log. Pure functions over plate-shaped items, so the whole
+ * state machine behind the sheet is exercised here without a DOM.
+ */
+const Dr = await import(R + 'describeDraft.js')
+
+const matched = (over = {}) => ({ id: over.id || Dr.draftId(), key: 'k', foodId: 'f1', quantity: 1, unit: 'serving', ...over })
+const unmatched = (over = {}) => ({ id: over.id || Dr.draftId(), key: 'k', name: 'gnocchi bake', text: 'gnocchi bake', ...over })
+const estimated = (over = {}) => ({ id: over.id || Dr.draftId(), key: 'k', name: 'curry', quantity: 1, unit: 'serving', computed: { kcal: 700, protein: 30, fat: 30, carbs: 70 }, ...over })
+
+eq('stampRows gives every row an id and a key', Dr.stampRows([{ name: 'Eggs', text: '2 Eggs' }]).map((r) => [typeof r.id, r.key]), [['string', '2 eggs']])
+eq('stampRows keeps an existing id', Dr.stampRows([{ id: 'x', text: 'a' }])[0].id, 'x')
+eq('a key ignores case and spacing', Dr.draftKey('  Two   EGGS '), 'two eggs')
+
+{
+  const fixedEggs = matched({ id: 'old', key: 'two eggs', quantity: 3, fixed: true })
+  const oldToast = unmatched({ id: 'old-toast', key: 'toast' })
+  const reread = [
+    { id: 'n1', key: 'a banana', foodId: 'f9', quantity: 1, unit: 'serving' },
+    { id: 'n2', key: 'two eggs', foodId: 'f1', quantity: 2, unit: 'serving' },
+    { id: 'n3', key: 'toast', foodId: 'f2', quantity: 1, unit: 'serving' },
+  ]
+  const out = Dr.carryCorrections([fixedEggs, oldToast], reread)
+  eq('a re-read keeps a row fixed by hand, wherever it moved to', out.map((r) => r.id), ['n1', 'old', 'n3'])
+  eq('and takes the new read for anything not fixed', out[2].foodId, 'f2')
+  eq('a re-read never duplicates', out.length, 3)
+  const twice = Dr.carryCorrections([fixedEggs], [{ id: 'n2', key: 'two eggs' }, { id: 'n4', key: 'two eggs' }])
+  eq('one fixed row stands in for at most one new row', twice.map((r) => r.id), ['old', 'n4'])
+}
+
+{
+  const a = matched({ id: 'a' })
+  const b = unmatched({ id: 'b' })
+  const c = matched({ id: 'c' })
+  const d = unmatched({ id: 'd' })
+  const reply = [estimated({ id: 'r1' }), estimated({ id: 'r2' })]
+  const out = Dr.replaceSent([a, b, c, d], ['b', 'd'], reply)
+  eq('a model reply lands where the first sent row was', out.map((r) => r.id), ['a', 'r1', 'r2', 'c'])
+  eq('an empty reply changes nothing', Dr.replaceSent([a, b], ['b'], []).map((r) => r.id), ['a', 'b'])
+  const late = Dr.replaceSent([a, b, unmatched({ id: 'e' })], ['b'], reply)
+  eq('a row that was not sent is not swept up', late.map((r) => r.id), ['a', 'r1', 'r2', 'e'])
+}
+
+{
+  eq('all matched can log', Dr.draftStatus([matched(), estimated()]).canLog, true)
+  const s1 = Dr.draftStatus([matched(), unmatched()])
+  eq('an unmatched row blocks', [s1.canLog, s1.reason], [false, '1 item needs a food.'])
+  const s2 = Dr.draftStatus([matched({ quantity: null }), matched({ quantity: null }), unmatched()])
+  eq('the reason counts what is missing', s2.reason, '1 item needs a food and 2 items need an amount.')
+  eq('nothing at all cannot log', Dr.draftStatus([]).reason, 'Nothing to log yet.')
+  const s3 = Dr.draftStatus([matched(), matched({ missing: true })])
+  eq('a deleted food is skipped, not blocking', [s3.canLog, s3.missing], [true, 1])
+}
+
+{
+  const plate = [{ foodId: 'p1', quantity: 1, unit: 'serving' }, { foodId: 'x', describe: 'draft-1' }, { foodId: 'p2', quantity: 2, unit: 'g' }]
+  const once = Dr.mergeIntoPlate(plate, 'draft-1', [matched({ id: 'm1', foodId: 'y' })])
+  eq('a draft replaces its own earlier batch in place', once.map((i) => i.foodId), ['p1', 'y', 'p2'])
+  eq('and carries its tag', once[1].describe, 'draft-1')
+  eq('and leaves the review bookkeeping behind', ['id', 'key', 'fixed'].some((k) => k in once[1]), false)
+  const twice = Dr.mergeIntoPlate(once, 'draft-1', [matched({ foodId: 'y' }), matched({ foodId: 'z' })])
+  eq('sending again does not double the meal', twice.map((i) => i.foodId), ['p1', 'y', 'z', 'p2'])
+  const fresh = Dr.mergeIntoPlate([{ foodId: 'p1' }], 'draft-2', [matched({ foodId: 'q' })])
+  eq('a new draft is appended after what was there', fresh.map((i) => i.foodId), ['p1', 'q'])
+}
+
+eq('the amount question names the food', Dr.amountQuestion('Rice'), 'About how much rice?')
+eq('the amount question lowers a Title Case product name', Dr.amountQuestion('Dried Soft Apricots'), 'About how much dried soft apricots?')
+eq('the amount question keeps an acronym', Dr.amountQuestion('PB Powder'), 'About how much PB powder?')
+
+const { singular } = await import(R + 'describeResolve.js')
+eq('eggs is an egg', singular('two eggs'), 'two egg')
+eq('apricots keeps its adjective', singular('dried apricots'), 'dried apricot')
+eq('berries is a berry', singular('mixed berries'), 'mixed berry')
+eq('a singular is left alone', singular('rice'), null)
+eq('a three-letter word is left alone', singular('gas'), null)
+eq('dishes is a dish', singular('side dishes'), 'side dish')
+eq('the amount question with no name', Dr.amountQuestion(''), 'About how much?')
+
 console.log('\n--- the spec\'s two examples ---')
 let totalFoods = 0
 let totalItems = 0

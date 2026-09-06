@@ -73,3 +73,59 @@ export function clearAiKey() {
     return false
   }
 }
+
+/* ------------------------------------------------------------ preference */
+
+/**
+ * Whether Describe may send anything, kept apart from whether it could.
+ *
+ * A stored key says a request would be accepted. It does not say the person
+ * wants one made, and for a while the two were read as the same thing: the
+ * sheet offered a "send to Gemini" button to anyone with a key, and every tap
+ * of it was a fresh decision to let words leave the phone. That is honest and
+ * it is also what made the flow feel like a choice of processing methods
+ * rather than a way to log a meal.
+ *
+ * So the decision is made once and remembered here. `on` means the sheet
+ * sends the fragments it could not place itself, automatically, every time.
+ * `off` means it never sends and says so. Unset — the state every existing
+ * key is in — means the sheet asks the first time it has something it would
+ * send, records the answer, and does not ask again. A key on its own never
+ * turns this on; the switch in Settings and the one-time question in the
+ * sheet are the only two things that write it.
+ *
+ * Stored beside the key and for the same reason: it is not data, it does not
+ * belong in a backup, and a restore must not flip it.
+ */
+const MODE_KEY = 'mt:aiDescribe'
+
+/** @returns {'on' | 'off' | ''} '' means never decided. */
+export function getAiMode() {
+  try {
+    const v = localStorage.getItem(MODE_KEY)
+    return v === 'on' || v === 'off' ? v : ''
+  } catch {
+    return ''
+  }
+}
+
+/** @param {'on' | 'off'} mode */
+export function setAiMode(mode) {
+  try {
+    if (mode === 'on' || mode === 'off') localStorage.setItem(MODE_KEY, mode)
+    else localStorage.removeItem(MODE_KEY)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Sending is allowed: there is a key, and the person has said yes. */
+export function aiEnabled() {
+  return hasAiKey() && getAiMode() === 'on'
+}
+
+/** There is a key and no decision yet, so the sheet may ask once. */
+export function aiUndecided() {
+  return hasAiKey() && getAiMode() === ''
+}

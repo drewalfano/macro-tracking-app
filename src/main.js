@@ -391,12 +391,23 @@ async function registerServiceWorker() {
       scope: import.meta.env.BASE_URL,
     })
 
-    // Never swap versions underneath someone mid-entry. Ask first.
+    /**
+     * Never swap versions underneath someone mid-entry. Ask first.
+     *
+     * The new worker has already installed by the time this shows — its whole
+     * shell is on disk, verified — and is waiting. Nothing changes until Update
+     * is tapped. Dismissing the toast costs nothing: the worker keeps waiting,
+     * and the next time the app comes to the front it is offered again.
+     */
+    let updateRequested = false
     const promptUpdate = (worker) => {
       toast('A new version is ready.', {
         action: 'Update',
         duration: 20000,
-        onAction: () => worker.postMessage({ type: 'SKIP_WAITING' }),
+        onAction: () => {
+          updateRequested = true
+          worker.postMessage({ type: 'SKIP_WAITING' })
+        },
       })
     }
 
@@ -444,9 +455,22 @@ async function registerServiceWorker() {
     })
     window.addEventListener('pageshow', checkForUpdate)
 
+    /**
+     * Reload only for a REPLACEMENT, never for the first worker.
+     *
+     * The first install claims the page so that its fetches are answered from
+     * the cache from then on, and that claim fires `controllerchange` exactly
+     * like an update does. Reloading on it threw away whatever was on screen a
+     * second or two into the very first visit — the page already running is
+     * the same build the worker just cached, so there is nothing to reload
+     * for. A page that was controlled before, or that asked for the update
+     * itself, is on an old build and does need the new one.
+     */
+    const hadController = !!navigator.serviceWorker.controller
     let reloading = false
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (reloading) return
+      if (!hadController && !updateRequested) return
       reloading = true
       location.reload()
     })

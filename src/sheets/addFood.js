@@ -850,19 +850,17 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
         actionButton({
           iconName: 'sparkle',
           label: 'Describe',
+          /**
+           * Describe reviews and logs on its own panel now, so the plate is
+           * no longer where a description lands. It is still reachable: the
+           * review offers "Add to plate", and `onStaged` is what repaints the
+           * bar here when it pops back to this sheet.
+           */
           onclick: () =>
             pushDescribe(ctx, {
-              onItems: async (newItems) => {
-                await addToPlate(newItems, 'Description', { silent: true })
-                const current = await getPlate()
-                pushPlate(ctx, {
-                  plate: current,
-                  onCommitted: (entries) => {
-                    ctx.close()
-                    plateLoggedToast(entries)
-                  },
-                })
-              },
+              date,
+              block: targetBlock,
+              onStaged: () => paintPlate(),
             }),
         })
       )
