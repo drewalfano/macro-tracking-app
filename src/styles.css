@@ -4160,10 +4160,6 @@
 .sheet-scrim[data-dismissing='true'] .sheet-dim {
   animation: none;
 }
-.toast-in {
-  animation: toast-in var(--dur-base) var(--ease-out);
-}
-
 /**
  * The confirm box arrives with its own scrim — gaps item 14.
  *
@@ -4300,17 +4296,20 @@ body:has(.sheet-scrim) .toast-host {
  * edge so the scale takes width from both sides and none of the lift back.
  *
  * The transition on `transform` is what carries a card forward when the one in
- * front of it leaves. It is also why `swipeAway` sets `transition: none` for the
- * length of a drag — see the note at the call site.
+ * front of it leaves, and what brings a new card up from 12px below — the
+ * entrance is a start state handed to this transition, not a keyframe; toast.js
+ * says why. It is also why `swipeAway` sets `transition: none` for the length
+ * of a drag — see the note at the call site.
  *
- * A hairline of canvas along the top edge is what makes two ink cards read as
- * two. Ink on ink has no edge, and without it the strip behind was a bump in
- * the silhouette rather than a card. 22% is the least that survives both
- * schemes. The shadow under it is faint on purpose: the hairline is what draws
- * the edge, and the shadow only keeps the strip from reading as flat. The first
- * draft had it at 35% over 14px and it read as a dark band across the card
- * behind, which Drew called harsh. 14% over 8px is the least that still
- * separates ink from ink without drawing anything of its own.
+ * **The cards behind are tinted, and nothing draws a line.** Ink on ink has no
+ * edge, so the first draft gave every card a hairline of canvas along its top
+ * and a shadow under it. Both ghosted: a card arrives translucent over the face
+ * of the one it is pushing back, and for that 200ms its edge was a faint stroke
+ * sliding across the older card. The same happened in reverse as a front card
+ * faded out over a newcomer. A tint has no edge to drag — the strip that shows
+ * is simply a lighter ink in the light scheme and a darker one in the dark,
+ * because the mix is toward canvas in both. It transitions with the depth, so a
+ * card coming forward darkens as it arrives rather than switching.
  */
 .toast-deck {
   display: grid;
@@ -4322,18 +4321,17 @@ body:has(.sheet-scrim) .toast-host {
   --depth: 0;
   transform-origin: 50% 0;
   transform: translateY(calc(var(--depth) * -10px)) scale(calc(1 - var(--depth) * 0.06));
-  box-shadow:
-    0 -1px 0 0 color-mix(in srgb, var(--color-canvas) 22%, transparent),
-    0 -3px 8px -4px rgb(0 0 0 / 0.14);
   transition:
     transform var(--dur-base) var(--ease-out),
-    opacity var(--dur-fast) ease-in;
+    opacity var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
 }
 /* Only the front is live. A card behind shows a strip, and a swipe that began
    on the strip would drag a toast down behind the one in front of it. It comes
    forward, and becomes tappable, when the front leaves. */
 .toast-deck > .toast:not([data-depth='0']) {
   pointer-events: none;
+  background-color: color-mix(in srgb, var(--color-ink) 84%, var(--color-canvas));
 }
 
 /**
@@ -4347,11 +4345,6 @@ body:has(.sheet-scrim) .toast-host {
  */
 .toast-deck > .toast[data-removing='front'] {
   pointer-events: none;
-  /* A running `toast-in` outranks an inline style, so a toast dismissed inside
-     its own 200ms entrance would ignore the exit written by `dismiss` and simply
-     vanish when it was removed. Rare by hand, not rare when the cap dismisses
-     the oldest the instant another toast arrives. */
-  animation: none;
 }
 
 /**
@@ -4367,7 +4360,6 @@ body:has(.sheet-scrim) .toast-host {
  */
 .toast-deck > .toast[data-removing='behind'] {
   pointer-events: none;
-  animation: none;
   opacity: 0;
   transform: translateY(4px) scale(0.9);
   transition:

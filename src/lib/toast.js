@@ -75,11 +75,19 @@ function layout() {
     const depth = n - 1 - i
     el.style.setProperty('--depth', String(depth))
     el.dataset.depth = String(depth)
-    // Newest on top. Written inline so a card on its way out keeps the layer it
-    // had, above or below whichever neighbour is moving past it.
-    el.style.zIndex = String(10 + i)
   })
 }
+
+/**
+ * Layer order is the order of arrival, and it never changes.
+ *
+ * Written once, from a counter, rather than recomputed by `layout()`. A card on
+ * its way out keeps the layer it had, so the front leaving stays under a toast
+ * that arrived a moment later and over the one it had been covering. Recomputed
+ * from position, a leaving front sat above the newcomer for its last 160ms and
+ * its edge crossed the new card's face.
+ */
+let layer = 0
 
 /**
  * Escape clears everything.
@@ -187,7 +195,7 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
     'div',
     {
       class:
-        'toast toast-in pointer-events-auto flex w-full max-w-[430px] items-center ' +
+        'toast pointer-events-auto flex w-full max-w-[430px] items-center ' +
         'gap-[12px] rounded-[24px] bg-ink py-[12px] pl-[20px] text-canvas ' +
         // 12 behind the pill because the pill's own fill carries the edge; 20
         // when there is nothing there, so a message-only toast is padded evenly.
@@ -211,9 +219,9 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
     /**
      * TWO EXITS, and which one runs is decided by where the toast was.
      *
-     * **The front leaves the way it came.** `toast-in` brought it up 12px, so it
-     * goes back down 12 and fades, and the card behind it, if there is one,
-     * comes forward on `layout()` above.
+     * **The front leaves the way it came.** It arrived up 12px, so it goes back
+     * down 12 and fades, and the card behind it, if there is one, comes forward
+     * on `layout()` above.
      *
      * Written inline rather than left to the stylesheet, because a swipe has
      * already put an inline transform and opacity on this element and inline
@@ -222,7 +230,7 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
      *
      * So the exit is relative: wherever it is now, 12 further in the direction
      * it was already going. A tapped toast starts at 0 and drifts 12 — the
-     * reverse of `toast-in` — and a swiped one carries on out.
+     * reverse of its arrival — and a swiped one carries on out.
      */
     if (wasFront) {
       const { y } = paintedTranslate(el)
@@ -254,8 +262,30 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
 
   open.push({ el, dismiss })
   bindEscape()
+
+  /**
+   * THE ENTRANCE IS A TRANSITION, NOT AN ANIMATION.
+   *
+   * It used to be `toast-in`, a keyframe from 12px below. A keyframe owns the
+   * transform for its 200ms, and the deck writes the transform too: a toast
+   * bumped to depth 1 while its own entrance was still running finished rising
+   * to 0, then snapped to its lifted, narrower place on the frame the keyframe
+   * released it. Two taps on the Quick add tile inside a fifth of a second was
+   * enough, and the stack sat uneven for a frame and jumped.
+   *
+   * So the arrival is written as a start state that the deck's own transition
+   * carries to rest: 12 below and clear, appended, reflowed, then let go. A
+   * second arrival mid-flight retargets that transition from wherever the card
+   * is, which is what a keyframe cannot do. Same numbers, same curve, one owner.
+   */
+  el.style.zIndex = String(++layer)
+  el.style.transform = 'translateY(12px)'
+  el.style.opacity = '0'
   getDeck().appendChild(el)
   layout()
+  void el.offsetHeight
+  el.style.transform = ''
+  el.style.opacity = ''
   timer = setTimeout(dismiss, duration)
 
   /**
