@@ -351,50 +351,65 @@ export function confirm(
       confirmLabel
     )
 
+    /**
+     * The wash is its own element, for the reason `.sheet-dim` in lib/sheet.js
+     * gives: an opacity fade on the scrim would fade the box with it. It also
+     * means the confirm's backdrop now arrives and leaves the way a sheet's
+     * does — `scrim-in` and `scrim-out` are keyed on `.sheet-dim` — where
+     * before it had no fade at all and popped in and out around a box that
+     * animated. See `.confirm-dim` in styles.css.
+     */
+    const dim = h('div', { class: 'sheet-dim confirm-dim', 'aria-hidden': 'true' })
+
+    const box = h(
+      'div',
+      {
+        // `confirm-in`, because the box used to arrive at full size on frame
+        // one while the scrim was still fading in behind it — the app's one
+        // blocking dialog turning up ahead of its own backdrop. See the rule.
+        // `relative` so it paints over the dim, which is absolute.
+        class:
+          'confirm-in relative w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
+        role: 'alertdialog',
+        'aria-modal': 'true',
+      },
+      h('h2', { class: 'text-[20px] font-semibold' }, title),
+      message && h('p', { class: 'mt-[10px] text-[14px] leading-snug text-muted' }, message),
+      requireText &&
+        h(
+          'div',
+          { class: 'mt-[20px]' },
+          h('p', { class: 'mb-[10px] text-[14px] text-muted' }, `Type ${requireText} to confirm.`),
+          h('input', {
+            class: 'field text-[16px] font-semibold',
+            autocapitalize: 'characters',
+            autocomplete: 'off',
+            ref: (el) => (input = el),
+            oninput: () => {
+              confirmBtn.disabled = input.value.trim().toUpperCase() !== requireText.toUpperCase()
+            },
+          })
+        ),
+      h(
+        'div',
+        { class: 'mt-[20px] flex flex-col gap-[10px]' },
+        confirmBtn,
+        h('button', { class: 'btn-secondary', onclick: () => close(false) }, cancelLabel)
+      )
+    )
+
     const scrim = h(
       'div',
       {
-        class:
-          'sheet-scrim screen-cover z-[90] flex items-center justify-center bg-black/40 px-[20px] backdrop-blur-[2px]',
+        class: 'sheet-scrim screen-cover z-[90] flex items-center justify-center px-[20px]',
+        // Anywhere outside the box. That includes the dim, which sits between
+        // the scrim and the box, so `e.target === scrim` stopped being true.
         onclick: (e) => {
-          if (e.target === scrim) close(false)
+          if (!box.contains(e.target)) close(false)
         },
       },
-      h(
-        'div',
-        {
-          // `confirm-in`, because the box used to arrive at full size on frame
-          // one while the scrim was still fading in behind it — the app's one
-          // blocking dialog turning up ahead of its own backdrop. See the rule.
-          class:
-            'confirm-in w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
-          role: 'alertdialog',
-          'aria-modal': 'true',
-        },
-        h('h2', { class: 'text-[20px] font-semibold' }, title),
-        message && h('p', { class: 'mt-[10px] text-[14px] leading-snug text-muted' }, message),
-        requireText &&
-          h(
-            'div',
-            { class: 'mt-[20px]' },
-            h('p', { class: 'mb-[10px] text-[14px] text-muted' }, `Type ${requireText} to confirm.`),
-            h('input', {
-              class: 'field text-[16px] font-semibold',
-              autocapitalize: 'characters',
-              autocomplete: 'off',
-              ref: (el) => (input = el),
-              oninput: () => {
-                confirmBtn.disabled = input.value.trim().toUpperCase() !== requireText.toUpperCase()
-              },
-            })
-          ),
-        h(
-          'div',
-          { class: 'mt-[20px] flex flex-col gap-[10px]' },
-          confirmBtn,
-          h('button', { class: 'btn-secondary', onclick: () => close(false) }, cancelLabel)
-        )
-      )
+      dim,
+      box
     )
 
     document.body.appendChild(scrim)

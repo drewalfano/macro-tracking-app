@@ -1,6 +1,6 @@
 import { h, repaint } from '../lib/dom.js'
 import { openSheet } from '../lib/sheet.js'
-import { toast, confirm } from '../lib/toast.js'
+import { toast } from '../lib/toast.js'
 import {
   getWeight,
   putWeight,
@@ -97,15 +97,17 @@ function dayPanel({ day: initialDay, unit }) {
         {
           class: 'btn-secondary',
           onclick: async () => {
-            const ok = await confirm({
-              title: `Remove ${dayPhrase(day)}’s weight?`,
-              message: 'The trend recalculates without it.',
-              confirmLabel: 'Remove',
-            })
-            if (!ok) return
+            // Undo rather than a dialog, which is how removing an entry already
+            // works: the weigh-in comes back exactly as it was, so there is
+            // nothing irreversible to ask about. Review finding 7. `existing`
+            // is captured now because the panel reassigns it on a day change.
+            const removed = existing
             await deleteWeight(day)
             ctx.pop()
-            toast('Weigh-in removed')
+            toast('Weigh-in removed', {
+              action: 'Undo',
+              onAction: () => putWeight(day, removed.kg),
+            })
           },
         },
         'Remove this weigh-in'

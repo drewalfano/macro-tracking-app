@@ -1,4 +1,4 @@
-import { h, clear, swipeToDismiss, reduceMotion } from './dom.js'
+import { h, clear, swipeToDismiss, reduceMotion, paintedTranslate } from './dom.js'
 import { fadeLayers, SHEET_HEAD_RAMP } from './fade.js'
 import { icon } from './icons.js'
 import { setScrimmed } from './statusBar.js'
@@ -33,6 +33,13 @@ const STATE = 'mt-sheet'
  */
 const PANEL_MS = 240
 const PANEL_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+
+/**
+ * The exit, however it is triggered. `--dur-base` in the stylesheet's
+ * `sheet-out`; here for the paths that write it inline and for the teardown
+ * that has to outlast it.
+ */
+const EXIT_MS = 200
 
 /**
  * iOS-safe scroll lock.
@@ -215,13 +222,9 @@ export function openSheet({ title, render, footer = null, action = null }) {
   let scrimTimer = null
   let scrimHeld = false
   const holdScrim = () => {
-    // Under reduce there is no fade to meet in the middle: the scrim is opaque
-    // on the first frame, so waiting would show a bright strip over a dark page.
-    if (reduceMotion()) {
-      scrimHeld = true
-      setScrimmed(true)
-      return
-    }
+    // No reduced-motion branch any more: the dim fades under reduce as well
+    // now, over 200 rather than 260 — see the reduced-motion block at the foot
+    // of styles.css — so there is a middle to meet on either setting.
     scrimTimer = setTimeout(() => {
       scrimTimer = null
       scrimHeld = true
@@ -790,16 +793,59 @@ export function openSheet({ title, render, footer = null, action = null }) {
     if (active?.scrim === scrim) active = null
   }
 
+  /**
+   * A sheet closed while still arriving leaves from where it has got to —
+   * review finding 2.
+   *
+   * `data-closing` swaps the panel's animation to `sheet-out`, and a keyframe
+   * animation plays from its own first frame, which is `translateY(0)`: fully
+   * open. So a scrim tap, an Escape, a hardware back or a programmatic close
+   * inside the 320ms entry snapped the panel to open and then slid it out. The
+   * sheet finished ARRIVING before it would leave, which is the case the
+   * fluid-interface rules use as their example of what not to do.
+   *
+   * `swipeToDismiss` had already solved this for the finger, and this is the
+   * same handover for every other way of closing: read where the panel is
+   * painted, pin it there, switch the keyframes off with `data-dismissing`, and
+   * finish under an inline transition. The dim is pinned at its painted opacity
+   * in the same breath, since `data-dismissing` takes its keyframe off too and
+   * it would otherwise land on its resting value for a frame.
+   *
+   * Only when the panel is genuinely mid-flight. At rest `y` is 0 and the
+   * keyframe exit is right as it stands. A finger has already done all of this
+   * itself when `dismissing` is set. And under reduced motion the entry is an
+   * opacity ramp with no transform to read, so the stylesheet's reduced exit is
+   * the one that runs.
+   */
+  function leaveFromHere() {
+    if (panel.dataset.dismissing === 'true' || reduceMotion()) return
+    const { y } = paintedTranslate(panel)
+    if (y <= 0) return
+    const dimAt = getComputedStyle(dim).opacity
+    panel.dataset.dismissing = 'true'
+    scrim.dataset.dismissing = 'true'
+    panel.style.transition = 'none'
+    panel.style.transform = `translateY(${y}px)`
+    dim.style.transition = 'none'
+    dim.style.opacity = dimAt
+    void panel.offsetHeight
+    panel.style.transition = `transform ${EXIT_MS}ms ease-in`
+    panel.style.transform = 'translateY(100%)'
+    dim.style.transition = `opacity ${EXIT_MS}ms ease-out`
+    dim.style.opacity = '0'
+  }
+
   function teardown(value) {
     if (closing) return
     closing = true
+    leaveFromHere()
     scrim.dataset.closing = 'true'
     panel.dataset.closing = 'true'
     // At the start of the exit, not in `destroy()` at the end of it, so the
     // strip clears while the scrim is clearing rather than a frame after it has
     // gone. See `releaseScrim`.
     releaseScrim()
-    setTimeout(destroy, 200)
+    setTimeout(destroy, EXIT_MS)
     resolveResult(value)
   }
 

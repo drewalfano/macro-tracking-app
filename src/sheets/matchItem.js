@@ -1,6 +1,6 @@
 import { h, repaint } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
-import { searchFoods } from '../lib/db.js'
+import { searchFoods, SEARCH_DEBOUNCE_MS } from '../lib/db.js'
 import { searchNewStaples, stapleDraft, stapleName } from '../lib/staples.js'
 import { searchProducts, isOnline } from '../lib/off.js'
 import { card, listRow, emptyRow } from '../lib/ui.js'
@@ -25,8 +25,6 @@ import { servingLabel, displayName } from '../lib/format.js'
  * favourites, recents, a plate bar and two route buttons, none of which mean
  * anything when the question is "which food is this one row".
  */
-
-const SEARCH_DEBOUNCE_MS = 300
 
 /**
  * @param {object} ctx        the sheet context to push onto

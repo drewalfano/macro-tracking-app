@@ -6,6 +6,7 @@ import {
   getSettings,
   recentFoods,
   searchFoods,
+  SEARCH_DEBOUNCE_MS,
   getFood,
   getMeal,
   deleteEntry,
@@ -46,15 +47,6 @@ import { pushDescribe } from './describe.js'
  * everybody already reads as "ask a question here", and it costs the row
  * nothing — the two buttons left behind get wider, not lonelier.
  */
-
-/**
- * Shorter than the Open Food Facts panel's 300.
- *
- * That number is pacing a network request and is there to stop the app talking
- * to a server on every keystroke. This search reads an in-memory list, so the
- * only thing being paced is a repaint, and the wait is pure lag.
- */
-const SEARCH_DEBOUNCE_MS = 120
 
 /**
  * Row that opens on tap and logs on `+`.

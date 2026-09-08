@@ -2744,6 +2744,7 @@
      second value, the same trick the ring tracks use. */
   .switch {
     position: relative;
+    display: block;
     flex: none;
     width: 51px;
     height: 31px;
@@ -2752,8 +2753,38 @@
     border: 0;
     transition: background-color var(--dur-fast) ease-out;
   }
-  .switch[aria-checked='true'] {
+  /**
+   * The native control, invisible and on top — review finding 8.
+   *
+   * See `switchRow` in lib/ui.js for why there is a real input here at all. It
+   * is not clipped to a pixel and parked offscreen the way a hidden input
+   * usually is: it IS the tap target. `opacity: 0` keeps it hit-testable where
+   * `visibility` or `display` would not, and its appearance is deliberately
+   * left native — `appearance: none` would hand WebKit a plain checkbox to
+   * style, and the toggle haptic belongs to the switch renderer. It takes the
+   * 44px hit area the `.tap-44` pseudo used to give the button, so the finger
+   * lands on the native element and not on a label forwarding to it.
+   */
+  .switch-input {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+    margin: 0;
+    opacity: 0;
+    z-index: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .switch:has(.switch-input:checked) {
     background: var(--color-ink);
+  }
+  /* The drawn control shows the focus the invisible input holds. */
+  .switch:has(.switch-input:focus-visible) {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
   }
   .switch-knob {
     position: absolute;
@@ -2765,7 +2796,7 @@
     background: var(--color-surface);
     transition: transform var(--dur-fast) var(--ease-out);
   }
-  .switch[aria-checked='true'] .switch-knob {
+  .switch:has(.switch-input:checked) .switch-knob {
     transform: translateX(20px);
   }
 
@@ -3465,8 +3496,10 @@
    * and it is why the utility still exists separately.
    *
    * What each one gains, measured at 375pt: `.chip-sm` 30 → 44 tall, `.segment`
-   * 40 → 44, `.switch` 31 → 44. None of them grows horizontally, because all
-   * three are already wider than 44 and `max(100%, 44px)` leaves that axis alone
+   * 40 → 44. `.switch` took 31 → 44 from here too, until its native input became
+   * the hit area itself and it left the list — see `.switch-input`. Neither
+   * grows horizontally, because both are already wider than 44 and
+   * `max(100%, 44px)` leaves that axis alone
    * — which is the whole reason this is safe to apply so broadly. Every
    * adjacency in this app is horizontal: segments sit 4px apart, the plate's two
    * buttons 10px, the label-photo chips 10px. None of those gaps is touched.
@@ -3477,14 +3510,12 @@
    */
   .tap-44,
   .chip-sm,
-  .segment,
-  .switch {
+  .segment {
     position: relative;
   }
   .tap-44::after,
   .chip-sm::after,
-  .segment::after,
-  .switch::after {
+  .segment::after {
     content: '';
     position: absolute;
     left: 50%;
@@ -3505,7 +3536,9 @@
   }
 }
 
-/* Motion — fires once, in response to the user. No loops, no ambient motion. */
+/* Motion — fires once, in response to the user. The app's two loops live
+   elsewhere and earn it: `bubble-pan` is onboarding's backdrop and `sparkle-*`
+   is a wait indicator, both parked or bounded under reduced motion. */
 @keyframes sheet-in {
   from {
     transform: translateY(100%);
@@ -4210,11 +4243,32 @@
  * the same event at a different size. Naming the class separately keeps the
  * relationship legible: change one and you are deciding about the other.
  *
- * No exit of its own. The box is a child of the scrim, so `scrim-out` already
- * takes both together, which is the right answer and was true by accident.
+ * **And leaves the way it came — review batch.** The paragraph that stood here
+ * said the box needed no exit because `scrim-out` took the scrim and the box
+ * together. That was true when the fade lived on `.sheet-scrim` and stopped
+ * being true when it moved to `.sheet-dim`: the confirm's scrim had no dim
+ * child, so it popped in, and at close the box vanished on the frame the scrim
+ * was removed. The wash is now a `.sheet-dim` of its own — with the 2px blur
+ * and the deeper 40% the dialog always had — so it fades on the sheet's
+ * keyframes, and the box goes back the 12px it rose on the toast's own exit
+ * timing: 160ms, `ease-in`, the way a toast leaves.
  */
 .confirm-in {
   animation: toast-in var(--dur-base) var(--ease-out);
+}
+@keyframes confirm-out {
+  to {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.sheet-scrim[data-closing='true'] > .confirm-in {
+  animation: confirm-out var(--dur-fast) ease-in forwards;
+}
+.confirm-dim {
+  background: rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 /**
@@ -4704,5 +4758,103 @@ body:has(.sheet-scrim) .toast-host {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /**
+   * Reduced motion is gentler, not absent — review finding 6.
+   *
+   * The blanket above turns every movement into a cut, and for the elastic
+   * class of motion — the count-ups, the ring sweeps, the pill slides, the
+   * spring-backs — a cut is what the setting asks for. It is wrong for the
+   * surfaces that ARRIVE: a sheet popping in fully formed with the page already
+   * dimmed, a pushed panel and a switched tab appearing on one frame. The
+   * guidance is an opacity cross-fade in place of a slide — nothing travels
+   * across the screen, but the eye is still told that something new is here
+   * rather than that the old thing changed under it.
+   *
+   * `panel-in` and `view-in` were already opacity-only, so they are simply
+   * released from the blanket at their own durations; the sideways pair
+   * `panel-in-fwd`/`-back` fall back to the plain fade. The sheet and the
+   * confirm get `scrim-in`/`scrim-out`, which are opacity 0→1 and 1→0 under
+   * names that happen to be their first user's. `!important` throughout because
+   * the blanket is `!important`, and at equal importance specificity and order
+   * decide — which is why the three flagged sheet states are restated here in
+   * the order they hold above, so a finger still wins over a fade.
+   */
+  .sheet-panel,
+  .sheet-dim {
+    animation: scrim-in var(--dur-base) ease-out !important;
+  }
+  .sheet-panel[data-dragging='true'],
+  .sheet-scrim[data-dragging='true'] .sheet-dim {
+    animation: none !important;
+  }
+  .sheet-panel[data-closing='true'],
+  .sheet-scrim[data-closing='true'] .sheet-dim {
+    animation: scrim-out var(--dur-base) ease-out forwards !important;
+  }
+  .sheet-panel[data-dismissing='true'],
+  .sheet-scrim[data-dismissing='true'] .sheet-dim {
+    animation: none !important;
+  }
+  .panel-in,
+  .panel-in-fwd,
+  .panel-in-back {
+    animation: panel-in var(--dur-panel) var(--ease-glide) !important;
+  }
+  #view[data-entering] > * > * > *:not(header):not(.back-btn):not(h1) {
+    animation-duration: var(--dur-base) !important;
+  }
+  .confirm-in {
+    animation: scrim-in var(--dur-base) ease-out !important;
+  }
+  .sheet-scrim[data-closing='true'] > .confirm-in {
+    animation: scrim-out var(--dur-fast) ease-out forwards !important;
+  }
+}
+
+/**
+ * Frostier under reduced transparency — review finding 6.
+ *
+ * The blur bands are the only translucent chrome in the app: the tab bar and
+ * the sheet header both float over a list on a stack of `backdrop-filter`
+ * layers with a gradient veil on top. The setting asks for the see-through
+ * part to go, not the structure, and the veil IS the structure — it is what
+ * carries the band to solid canvas at the bar's edge. So the blur spans are
+ * dropped and the veil stays, which is the plain-gradient mode the sheet's
+ * footer already runs in (see `.sheet-fade`). The confirm's 2px blur goes the
+ * same way, with its wash deepened to cover what the blur was softening.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  .tabbar-fade > span:not(.fade-veil),
+  .sheet-head-fade > span:not(.fade-veil) {
+    display: none;
+  }
+  .confirm-dim {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgb(0 0 0 / 0.5);
+  }
+}
+
+/**
+ * Defined edges under increased contrast — review finding 6.
+ *
+ * The bar and the sheet are surfaces told apart from the page by tone alone,
+ * with a hairline at 10-14% to catch the edge. `prefers-contrast: more` asks
+ * for that edge to be a line you can see: the two hairlines step up toward
+ * ink, and the outline token every divider and field border draws with goes
+ * with them. `:root[data-theme]` as well as `:root`, because the theme blocks
+ * above redeclare these tokens at that specificity and this has to beat them
+ * in every theme.
+ */
+@media (prefers-contrast: more) {
+  :root,
+  :root[data-theme] {
+    --bar-edge: color-mix(in srgb, var(--color-ink) 60%, transparent);
+    --color-outline: color-mix(in srgb, var(--color-ink) 50%, transparent);
+  }
+  .sheet-panel {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-ink) 60%, transparent);
   }
 }

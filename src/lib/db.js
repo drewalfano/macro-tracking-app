@@ -549,6 +549,22 @@ export async function touchFood(id, { quantity, unit } = {}) {
   emit('foods')
 }
 
+/**
+ * How long a keystroke waits before a search runs — review finding 9.
+ *
+ * It was two numbers: 120 on the add sheet and 300 on the Describe match
+ * panel, for the same query against the same store, each followed by the same
+ * Open Food Facts request. The add sheet's comment held that its 120 was the
+ * local number and the 300 was pacing the network, and the code did not agree
+ * with it — both panels fire the remote search off the same timer the moment
+ * the local results have painted. So the only thing 300 was pacing was a
+ * repaint, and every millisecond past what absorbs a burst of typing is lag on
+ * the one panel where a described food with no match gets fixed. 120 is the
+ * shorter of the two and was already the one argued for. Exported from beside
+ * the query it paces so the callers cannot drift again.
+ */
+export const SEARCH_DEBOUNCE_MS = 120
+
 /** Local library search. Always available, network or not. */
 export async function searchFoods(query, limit = 50) {
   const q = query.trim().toLowerCase()

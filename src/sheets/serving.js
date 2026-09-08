@@ -1,7 +1,7 @@
 import { h } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { openSheet, presentSheet } from '../lib/sheet.js'
-import { toast, confirm } from '../lib/toast.js'
+import { toast } from '../lib/toast.js'
 import {
   getFood,
   getSettings,
@@ -372,15 +372,15 @@ export function servingPanel({
               {
                 class: 'btn-secondary',
                 onclick: async () => {
-                  const ok = await confirm({
-                    title: 'Remove this entry?',
-                    message: 'It comes off this day’s totals. You can undo straight after.',
-                    confirmLabel: 'Remove',
-                  })
-                  if (ok) {
-                    await onDelete()
-                    ctx.close()
-                  }
+                  /**
+                   * No confirm — review finding 7. The dialog that stood here
+                   * said "you can undo straight after" in its own message,
+                   * which is the case against asking: `onDelete` puts up the
+                   * Undo, and the swipe row removes the same entry with no
+                   * question at all. One action, one answer.
+                   */
+                  await onDelete()
+                  ctx.close()
                 },
               },
               'Remove from log'
@@ -609,12 +609,9 @@ function fixedEntryPanel({ entry, settings, kind }) {
             {
               class: 'btn-secondary',
               onclick: async () => {
-                const ok = await confirm({
-                  title: 'Remove this entry?',
-                  message: 'It comes off this day’s totals. You can undo straight after.',
-                  confirmLabel: 'Remove',
-                })
-                if (!ok) return
+                // No confirm: the Undo on the toast is the whole safety net,
+                // and the swipe row removes an entry with no question either.
+                // Review finding 7.
                 await deleteEntry(entry.id)
                 ctx.close()
                 toast('Removed', { action: 'Undo', onAction: () => putEntry(entry) })

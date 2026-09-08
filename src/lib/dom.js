@@ -345,8 +345,8 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
    * finger" from "settling after one". 0ms during the drag means the circles
    * are pinned to the movement; the release duration means they arrive with it.
    */
-  const setX = (x, animate) => {
-    const settle = x < 0 ? SWIPE_OPEN_MS : SWIPE_CLOSE_MS
+  const setX = (x, animate, ms = null) => {
+    const settle = ms ?? (x < 0 ? SWIPE_OPEN_MS : SWIPE_CLOSE_MS)
     const ease = x < 0 ? SWIPE_OPEN_EASE : SWIPE_CLOSE_EASE
     surface.style.transition = animate ? `transform ${settle}ms ${ease}` : 'none'
     surface.style.transform = `translateX(${x}px)`
@@ -354,10 +354,32 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
     el.style.setProperty('--swipe-settle', animate ? `${settle}ms` : '0ms')
   }
 
-  const close = (animate = true) => {
+  /**
+   * How long the rest of the journey takes — review finding 1b.
+   *
+   * `SWIPE_OPEN_MS` and `SWIPE_CLOSE_MS` are what a FULL width of travel takes,
+   * and they were being spent whatever was left. Released ten pixels short of
+   * open after a slow drag, the last ten took the whole 260 on an overshooting
+   * curve and the row visibly decelerated into a stop it had already reached;
+   * thrown from closed, it trailed the thumb that threw it. The deck fixed
+   * exactly this with its own `settleMs`, and this is the same rule: whichever
+   * is sooner of the time the finger's speed implies and the time the distance
+   * implies at the full-width rate, floored so it can never be a snap.
+   *
+   * Only from a release. `close` is also called by a neighbour being touched
+   * and by a row being deleted, and neither has a finger's speed to honour —
+   * they pass no duration and get the full one.
+   */
+  const settleMs = (travel, full) => {
+    const byFinger = Math.abs(velocity) > 0.05 ? travel / Math.abs(velocity) : Infinity
+    const byDistance = (travel / width) * full
+    return Math.round(Math.min(full, Math.max(90, Math.min(byFinger, byDistance))))
+  }
+
+  const close = (animate = true, ms = null) => {
     open = false
     dx = 0
-    setX(0, animate)
+    setX(0, animate, ms)
     el.dataset.open = 'false'
     delete el.dataset.swiping
     if (openSwipeRow === el) openSwipeRow = null
@@ -501,13 +523,14 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
       velocity < -SWIPE_FLICK ? true : velocity > SWIPE_FLICK ? false : dx < -width / 2
     if (shouldOpen) {
       open = true
+      const ms = settleMs(Math.abs(-width - dx), SWIPE_OPEN_MS)
       dx = -width
-      setX(-width, true)
+      setX(-width, true, ms)
       el.dataset.open = 'true'
       openSwipeRow = el
       onOpen?.()
     } else {
-      close()
+      close(true, settleMs(Math.abs(dx), SWIPE_CLOSE_MS))
     }
   }
 
@@ -755,7 +778,21 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
   }
 
   const onStart = (e) => {
-    if (committing || e.touches?.length > 1) return
+    /**
+     * Not while the deck is between a slide and its repaint either — review
+     * finding 3b.
+     *
+     * `awaitingPaint` is the window after a commit's transition has ended and
+     * before `paintDeck` has put the track back: the track is parked a full page
+     * over, not animating, and about to be reset to zero by the rebuild. A touch
+     * accepted in that window used to start from `startX = clientX` against a
+     * track sitting at a page width, so the first `onMove` yanked it — and even
+     * a correctly rebased catch would have been pulled to zero from under the
+     * finger a few frames later. A gesture that cannot be honoured is refused
+     * rather than accepted and then broken. The window is one IndexedDB read in
+     * practice and `PAINT_GRACE` at the outside.
+     */
+    if (committing || awaitingPaint || e.touches?.length > 1) return
     const p = e.touches ? e.touches[0] : e
     /**
      * Read first, before anything here writes to the track's style.
@@ -768,7 +805,7 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
      * read is free.
      */
     clearTimeout(springTimer)
-    const caught = awaitingPaint ? 0 : currentX()
+    const caught = currentX()
 
     startX = p.clientX
     startY = p.clientY
@@ -800,11 +837,8 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
      * and making it re-earn the axis test would spend the first 12px of a catch
      * doing nothing.
      *
-     * Not during `awaitingPaint`. The track is parked a full page over waiting
-     * for the rebuild then, which is a different situation wearing the same
-     * offset: it is not animating, and `paintDeck` is about to reset it. Picking
-     * that up would hand the finger a track that gets yanked to zero underneath
-     * it. Left as it was, which is its own open problem and not this one.
+     * Never during `awaitingPaint`: `onStart` refuses the touch outright then,
+     * for the reason given at the top of it.
      */
     if (Math.abs(caught) > 1) {
       decided = true
@@ -1346,14 +1380,51 @@ export function swipeToDismiss(panel, { scroller, scrim, dim = scrim, onDismiss,
      */
     panel.dataset.dismissing = 'true'
     if (scrim) scrim.dataset.dismissing = 'true'
+    /**
+     * Under reduce the flag still goes on and nothing below it runs: the panel
+     * holds where the finger left it and is cut at teardown, which is what the
+     * setting asks of a movement the hand was already making. The cross-fade
+     * the stylesheet gives a reduced-motion close is for closes that are not
+     * gestures.
+     */
     if (reduceMotion()) {
       onDismiss?.()
       return
     }
-    panel.style.transition = `transform ${duration}ms ease-in`
+    /**
+     * At the finger's speed, not from rest — review finding 1a.
+     *
+     * This was `ease-in` at a fixed 200ms. The sheet is travelling at 0.6px/ms
+     * or more when it is let go, and `ease-in` begins every curve at zero: the
+     * panel paused under the thumb and then accelerated away, which read as
+     * hesitation from something that had just been thrown.
+     *
+     * Two numbers, both from the release. The duration is what the remaining
+     * distance takes at the finger's own rate, capped at `duration` so a slow
+     * far release cannot crawl and floored so a violent one cannot snap. The
+     * curve's first control point is then placed so that its starting slope,
+     * over that duration, reproduces the finger's speed: `s0` is the ratio of
+     * the two, and `0.4 × s0` is the height of a control point at `x = 0.4`
+     * with that slope. Unclamped, `s0` is 1 and the sheet simply carries on at
+     * the speed it had. Capped because the finger was slow, `s0` is small and
+     * the sheet leaves at the finger's speed and accelerates from it — the old
+     * `ease-in`, in the one case it was right for. Never above 1: a duration
+     * held at the floor means the finger was faster than the sheet will be, and
+     * starting the sheet faster still would be the lurch in the other
+     * direction.
+     *
+     * The dim keeps `ease-out` at the same duration: it is a wash being lifted
+     * off the page rather than an object leaving it, and a fade that
+     * accelerates away leaves the page snapping back to brightness after the
+     * sheet has already gone.
+     */
+    const remaining = Math.max(1, panel.offsetHeight - dy)
+    const ms = Math.round(Math.min(duration, Math.max(120, remaining / Math.max(velocity, 1.2))))
+    const s0 = Math.min(1, (Math.max(0, velocity) * ms) / remaining)
+    panel.style.transition = `transform ${ms}ms cubic-bezier(0.4, ${(0.4 * s0).toFixed(3)}, 0.8, 1)`
     panel.style.transform = 'translateY(100%)'
     if (dim) {
-      dim.style.transition = `opacity ${duration}ms ease-in`
+      dim.style.transition = `opacity ${ms}ms ease-out`
       dim.style.opacity = '0'
     }
     onDismiss?.()
@@ -1527,8 +1598,17 @@ export function swipeAway(el, { onDismiss, onHold, onRelease, threshold = 44 } =
   let dy = 0
   let tracking = false
   let decided = false
+  /** Where the toast was painted when the drag claimed it — see `onMove`. */
+  let baseY = 0
 
-  const damp = (d) => (d < 0 ? d / 3 : d)
+  /**
+   * Upward gives, and gives less the further it goes. This was a flat third,
+   * the same constant fraction the deck's boundary used to be — see `rubber`
+   * for why a fraction is not a rubber band. 24px is the asymptote: about the
+   * height of the toast's own text, enough to feel the pull, never enough to
+   * look like the toast is going somewhere.
+   */
+  const damp = (d) => (d < 0 ? rubber(d, 24) : d)
 
   const onStart = (e) => {
     if (e.touches.length > 1) return
@@ -1562,9 +1642,28 @@ export function swipeAway(el, { onDismiss, onHold, onRelease, threshold = 44 } =
       }
       decided = true
       onHold?.()
+      /**
+       * Take over from where the toast is PAINTED — review finding 4.
+       *
+       * A release under the threshold sends the toast back to rest on a 160ms
+       * transition, and a finger that caught it inside that window started from
+       * `dy = 0`: `onHold` dropped the transition and the first frame wrote a
+       * transform from a fresh origin, so the toast jumped from wherever the
+       * snap-back had reached to within a few pixels of home. Same defect the
+       * row and the sheet had, same fix — read the painted offset, pin it, and
+       * measure the drag from there. After `onHold`, which is what clears the
+       * transition the pin has to land without.
+       *
+       * And give back the six pixels the decision cost, in the direction the
+       * finger went, so the toast starts from rest under it rather than six
+       * pixels along. The row and the deck both argue this one.
+       */
+      baseY = paintedTranslate(el).y
+      startY += rawY > 0 ? 6 : -6
+      el.style.transform = `translateY(${baseY}px)`
     }
     e.preventDefault()
-    dy = damp(rawY)
+    dy = baseY + damp(p.clientY - startY)
     el.style.transform = `translateY(${dy}px)`
     // Fades toward the threshold rather than to it, so a drag that is going to
     // succeed already looks like it is leaving before the finger lifts.

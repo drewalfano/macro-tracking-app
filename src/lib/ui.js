@@ -933,26 +933,33 @@ export function labelledField({ label, hint, children, color }) {
  * one side is the ordinary case and the other is an opt-in, and the control
  * should be quiet about it rather than asking every time.
  *
- * A real `role="switch"` rather than a checkbox, because "off" here is not
- * "unticked, please tick" — it is a complete, correct answer.
+ * A switch rather than a checkbox, because "off" here is not "unticked, please
+ * tick" — it is a complete, correct answer.
+ *
+ * A native `<input type="checkbox" switch>` under the drawn control — review
+ * finding 8. This was a button with `role="switch"`, and the input keeps that
+ * meaning: WebKit exposes the `switch` attribute as a switch, not a checkbox.
+ * What the native element adds is the one haptic the platform gives a web page
+ * at all — iOS plays its toggle haptic when a `switch` input flips under a
+ * finger, and `navigator.vibrate` does nothing there, so this is the only
+ * control in the app that can be felt. The input is invisible, keeps its
+ * native appearance so the renderer that owns the haptic stays alive, and
+ * covers the whole drawn control at the 44px hit size, so the finger lands on
+ * the native element itself rather than on a label forwarding to it.
+ * `:has(:checked)` draws the state. Unverified on a phone at the time of
+ * writing: the control works identically either way, and the haptic is the
+ * platform's to give.
  */
 export function switchRow({ label, hint, checked = false, onChange }) {
-  const knob = h('span', { class: 'switch-knob' })
-  const control = h(
-    'button',
-    {
-      type: 'button',
-      class: 'switch',
-      role: 'switch',
-      'aria-checked': String(checked),
-      onclick: () => {
-        const next = control.getAttribute('aria-checked') !== 'true'
-        control.setAttribute('aria-checked', String(next))
-        onChange?.(next)
-      },
-    },
-    knob
-  )
+  const input = h('input', {
+    type: 'checkbox',
+    switch: true,
+    class: 'switch-input',
+    'aria-label': label,
+    checked,
+    onchange: () => onChange?.(input.checked),
+  })
+  const control = h('label', { class: 'switch' }, input, h('span', { class: 'switch-knob' }))
 
   return h(
     'div',
