@@ -565,14 +565,28 @@ export function sectionLabel(text, right) {
  * A row inside a grouped card. Single-line rows are exactly 48px; rows with a
  * subtitle grow. `right` sits at the end, before the chevron.
  */
-export function listRow({ title, subtitle, right, onclick, chevron = false, leading, dim = false }) {
-  const tag = onclick ? 'button' : 'div'
+export function listRow({
+  title,
+  subtitle,
+  right,
+  onclick,
+  href,
+  chevron = false,
+  leading,
+  dim = false,
+}) {
+  // A real link, not `window.open`: that is popup-blocked without a user
+  // gesture and unreliable from the installed app, and a link is neither.
+  const tag = href ? 'a' : onclick ? 'button' : 'div'
   return h(
     tag,
     {
       class: `row${subtitle ? '' : ' row-single'}${dim ? ' opacity-60' : ''}`,
       onclick,
-      type: onclick ? 'button' : null,
+      type: tag === 'button' ? 'button' : null,
+      href,
+      target: href ? '_blank' : null,
+      rel: href ? 'noopener' : null,
     },
     leading || null,
     h(

@@ -306,9 +306,7 @@ export function aiDescribeScreen() {
       const sendSwitch = () =>
         switchRow({
           label: 'Send unmatched foods to Gemini',
-          hint:
-            'When Describe cannot place a food in your library, the staples table or ' +
-            'Open Food Facts, it sends just those words. Nothing else leaves the phone.',
+          hint: 'Only the words it could not place leave the phone.',
           checked: getAiMode() === 'on',
           onChange: (on) => {
             setAiMode(on ? 'on' : 'off')
@@ -335,22 +333,27 @@ export function aiDescribeScreen() {
             labelledField({
               label: 'API key',
               hint:
-                'Without a key, Describe still reads what it can and matches it against ' +
-                'your foods, the staples table and Open Food Facts. The key is for the rest: ' +
-                'dishes with no entry anywhere, and wording the rules will not split.',
+                'Optional. With a key, Describe can take "a Starbucks iced latte" or ' +
+                '"a plate of homemade pasta with turkey meatballs".',
               children: keyField,
             }),
             saveKeyBtn,
             clearKeySlot
           ),
+          card(
+            listRow({
+              title: 'Get a free key',
+              subtitle: 'Google AI Studio',
+              chevron: true,
+              href: 'https://aistudio.google.com/apikey',
+            })
+          ),
           sendSlot,
           h(
             'p',
-            { class: 'px-0 text-[12px] leading-snug text-muted' },
-            'What is sent is the exact words of the foods that could not be placed, and ' +
-              'nothing else: no date, no targets, no history, none of the foods that were ' +
-              'placed. The key travels in the request header to Google and is never stored ' +
-              'anywhere but this phone. It is not included in a backup.'
+            { class: 'text-[12px] leading-snug text-muted' },
+            'Only the words of foods it cannot place are sent. No date, targets or history. ' +
+              'The key stays on this phone and is left out of backups.'
           )
         )
       )
