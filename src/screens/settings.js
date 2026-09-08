@@ -16,8 +16,10 @@ import { pluralize } from '../lib/format.js'
 import { navigate } from '../router.js'
 import { getAiKey } from '../lib/aiKey.js'
 import { VERSION } from '../config.js'
-// TEMPORARY — see the Preview onboarding section at the bottom of this file.
 import { openOnboardingOverlay } from './onboarding.js'
+
+/** Flip to `true` to show the Preview onboarding row at the bottom of Settings. */
+const PREVIEW_ONBOARDING = false
 
 /**
  * Settings root: the targets, and a door onto everything else.
@@ -338,30 +340,31 @@ export function settingsScreen() {
           ),
 
           /* ---------------------------------------------------------------- *
-           * TEMPORARY: Preview onboarding. Delete this section, the import at
-           * the top of this file, and nothing else.
+           * Preview onboarding, behind `PREVIEW_ONBOARDING` at the top of this
+           * file. Off by default, everywhere: it is scaffolding for reviewing
+           * the first-run flow, not a feature. Set the constant to `true` for a
+           * round of testing and back to `false` after.
            *
            * Kept at the root and in a card of its own rather than tucked into
-           * About, so that removing it is one contiguous block and cannot take a
-           * neighbour with it. It is scaffolding for reviewing the first-run
-           * flow, not a feature, and it is going.
+           * About, so it is one contiguous block.
            *
            * Runs as a preview: blank draft, nothing written unless the last step
            * is taken deliberately, so walking through it cannot cost someone the
            * profile they already have.
            * ---------------------------------------------------------------- */
-          h(
-            'section',
-            {},
-            card(
-              listRow({
-                title: 'Preview onboarding',
-                subtitle: 'The first-run flow, full screen, as a new person sees it',
-                chevron: true,
-                onclick: () => openOnboardingOverlay({ preview: true }).then(rerender),
-              })
+          PREVIEW_ONBOARDING &&
+            h(
+              'section',
+              {},
+              card(
+                listRow({
+                  title: 'Preview onboarding',
+                  subtitle: 'The first-run flow, full screen, as a new person sees it',
+                  chevron: true,
+                  onclick: () => openOnboardingOverlay({ preview: true }).then(rerender),
+                })
+              )
             )
-          )
         )
       )
     },

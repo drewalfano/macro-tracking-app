@@ -791,9 +791,15 @@
      * band of the page showing, and the band is a whole element rather than a
      * sliver of one.
      */
+    /**
+     * The gutter between the safe-area edge and the header slot. It was 0 —
+     * see `.screen` for what put it back — and it is part of `--content-top`
+     * so the sheet cap keeps landing on the dashboard card's top edge.
+     */
+    --header-inset: 20px;
     --header-slot: 44px;
     --header-gap: 20px;
-    --content-top: calc(var(--header-slot) + var(--header-gap));
+    --content-top: calc(var(--header-inset) + var(--header-slot) + var(--header-gap));
 
     /**
      * The floating bar sits 20px off the bottom of the screen, and 20px in from
@@ -910,27 +916,32 @@
    * devices that have one, and to 0 in a browser tab where the chrome already
    * does the job.
    *
-   * **The safe-area inset IS the top padding. Nothing is added to it.**
+   * **The safe-area inset plus one gutter, and the gutter is the iOS 27 band.**
    *
-   * There used to be `+ 20px`, and it was the reason this app sat visibly lower
-   * than the system. UIKit puts a 44pt navigation bar flush against the safe
-   * area — zero gap — and `.page-header` is a 44px row, so the two are the same
-   * object and should start in the same place. The 20 pushed every title on
-   * every tab 20pt below where the platform puts it, which is small enough to
-   * look like nothing in isolation and obvious the moment the app is next to
-   * Settings or Mail.
+   * For a while it was the inset alone. UIKit puts a 44pt navigation bar flush
+   * against the safe area, `.page-header` is a 44px row, and a `+ 20px` here
+   * had left every title 20pt below where the platform puts it. That argument
+   * was right until iOS 27, which draws a fixed scroll-edge band across the top
+   * of every installed web app and blurs whatever sits under it. Flush against
+   * the inset, the header sat in the band at rest: the title and the day
+   * chevrons rendered soft on a page that had not scrolled. No meta tag turns
+   * the band off — last-call ruled out `viewport-fit` and the status-bar style
+   * separately and together, and there is no web equivalent of UIKit's hard
+   * edge style. What last-call does have is a gutter between the inset and its
+   * header, and its header stays sharp. This is that gutter.
    *
    * Everything moves with it. The title is what the column hangs off, so the
-   * page comes up rather than the gap under the header growing to absorb the
-   * difference — first content lands at 64 from the inset now instead of 80.
-   * The arithmetic is on `.page-header`.
+   * page comes down as one column rather than the gap under the header
+   * growing — first content lands at 84 from the inset now instead of 64. The
+   * arithmetic is on `.page-header`, and the sheet cap follows through
+   * `--content-top`.
    */
   .screen {
     width: 100%;
     max-width: 430px;
     margin-inline: auto;
     padding-inline: 20px;
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--header-inset));
     /* The band, not the bar. The arithmetic and what it cost are on
        `--nav-clear`. */
     padding-bottom: var(--nav-clear);
@@ -948,25 +959,24 @@
    *
    * The arithmetic, from the safe-area edge, identical on all three:
    *
-   *     .screen padding-top       0      ← the inset itself, nothing added
+   *     .screen padding-top      20      ← `--header-inset`, see `.screen`
    *     slot                   + 44      ← this rule
    *     margin-bottom          + 20      ← this rule
    *                            ────
-   *     first content            64
+   *     first content            84
    *
-   * **It was 20 + 44 + 16 = 80.** The 20 came off the top, where iOS puts
-   * nothing — see `.screen` — and the whole page came up with the title rather
-   * than the gap under it growing to absorb the difference. Holding first
-   * content at 80 was tried and is not what this wants: the screen reads as one
-   * column hung off the title, so moving the title and leaving the page behind
-   * is a different layout, not a corrected one.
+   * **It was 20 + 44 + 16 = 80, then 0 + 44 + 20 = 64.** The top 20 came off
+   * to sit where UIKit sits, and went back on when iOS 27 started blurring
+   * that position — see `.screen`. Both times the whole page moved with the
+   * title rather than the gap under it absorbing the difference: the screen
+   * reads as one column hung off the title, so moving the title and leaving
+   * the page behind is a different layout, not a corrected one.
    *
    * **The 16 became 20 because 16 was never a spacing decision.** It was
    * whatever made `20 + 44 + x` come out at a round 80, and it was the only 16
    * in the app — every column here is spaced 10 or 20, and the gap between the
    * header and the first block is the same kind of gap as the one between
-   * blocks. With the top inset gone there is nothing left holding it off the
-   * system value. 64 is the less tidy total and that is the right trade: the
+   * blocks. 84 is not a round total either, and that is the right trade: the
    * tidy total is what produced the orphan number in the first place.
    *
    * A 32.5px line box (26 × 1.25) centred in 44 leaves 5.75 of half-leading
