@@ -2,7 +2,8 @@ import './styles.css'
 
 import { h, mount, clear, pressDelegate } from './lib/dom.js'
 import { icon } from './lib/icons.js'
-import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
+import { checkStorage, getSettings, saveSettings, onChange, firstLoggedDate } from './lib/db.js'
+import { isIOS, isStandalone } from './lib/platform.js'
 import { toast } from './lib/toast.js'
 import { closeAnySheet } from './lib/sheet.js'
 import { fadeLayers, FADE_RAMP } from './lib/fade.js'
@@ -527,16 +528,16 @@ function renderStorageBlocked() {
 
 /* -------------------------------------------------------------- first run */
 
-const isStandalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
-
-const isIOS = () =>
-  /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-
-/** iOS gives no install prompt, so the app has to explain itself once. */
-function maybeShowInstallHint(settings) {
+/**
+ * iOS gives no install prompt, so the app has to explain itself once.
+ *
+ * Not while nothing has ever been logged: Today's first-run state carries the
+ * same instruction as a card, and a toast over it would say it twice. This is
+ * the reminder for whoever logged a meal first and installed never.
+ */
+async function maybeShowInstallHint(settings) {
   if (settings.firstRunSeen || isStandalone() || !isIOS()) return
+  if ((await firstLoggedDate()) === null) return
   setTimeout(() => {
     toast('Add to Home Screen from the Share menu to use this offline.', {
       action: 'Got it',

@@ -7,6 +7,7 @@ import {
   quickAddFoods,
   firstLoggedDate,
   deleteEntry,
+  saveSettings,
 } from '../lib/db.js'
 import { sumEntries, progress, computeMacros, MACRO_META } from '../lib/compute.js'
 import { macroRing } from '../lib/ring.js'
@@ -19,11 +20,13 @@ import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
 import { quickLogFood, defaultServing } from '../lib/logging.js'
 import { toast } from '../lib/toast.js'
 import { openEditEntry, openServingSheet } from '../sheets/serving.js'
-import { openDescribe } from '../sheets/describe.js'
+import { openAddFood } from '../sheets/addFood.js'
 import { openLogSheet } from '../sheets/log.js'
 import { openSheet } from '../lib/sheet.js'
 import { datePickerPanel } from '../lib/datePicker.js'
 import { state, setDate } from '../state.js'
+import { isIOS, isStandalone } from '../lib/platform.js'
+import { icon } from '../lib/icons.js'
 
 /**
  * Today. A dashboard card, then the log.
@@ -988,32 +991,99 @@ function quickAddSection({ foods, date, block }) {
  * load. This is the one card that replaces both: it says what the screen is
  * for, and it holds the action rather than pointing at one.
  *
- * The action opens Describe — a sentence is the shortest route from nothing
- * to a logged meal, and it needs no library to draw from, which is exactly
- * what a first run does not have. The other routes are named in the line
- * under it and are still one tap away on the `+`.
+ * The button opens the Add sheet, not Describe. Describe is the shortest route
+ * to one logged meal, but a first run is also the one time someone is looking
+ * at everything the app can do, and the Add sheet is where all of it is:
+ * search, scan, describe, type the numbers. The `+` opens the same sheet.
  *
- * `firstRun` is the state of the whole database, not a flag: nothing has ever
- * been logged. It goes away with the first entry and never comes back,
- * including after an import, which is right — an imported history is a
- * history. An empty day later on keeps its one-line "Nothing logged yet",
- * because by then the rail above it is doing the work.
+ * Shown while nothing has ever been logged and the card has not been waved
+ * away. The first part is the state of the whole database, not a flag. It
+ * goes away with the first entry and never comes back, including after an
+ * import, which is right — an imported history is a history. An empty day
+ * later on keeps its one-line "Nothing logged yet", because by then the rail
+ * above it is doing the work.
  */
 function firstMealCard(date, block) {
   return h(
     'div',
-    { class: 'flex flex-col gap-[10px] px-[20px] py-[20px]' },
-    h('p', { class: 'text-[16px] font-semibold leading-tight' }, 'Nothing logged yet'),
+    { class: 'relative flex flex-col gap-[10px] px-[20px] py-[20px]' },
+    dismissButton(() => saveSettings({ firstMealSeen: true })),
+    h('p', { class: 'text-[16px] font-semibold leading-tight pr-[32px]' }, 'Nothing logged yet'),
     h(
       'p',
       { class: 'text-[14px] leading-snug text-muted' },
-      'Describe what you ate in a sentence and the rings above start to fill. ' +
-        'The + button searches, scans a barcode, or takes the numbers by hand.'
+      'Log a meal and the rings above start to fill. ' +
+        'The + in the corner does the same thing whenever you need it.'
     ),
     h(
       'button',
-      { class: 'btn-primary mt-[10px]', onclick: () => openDescribe({ date, block }) },
+      { class: 'btn-primary mt-[10px]', onclick: () => openAddFood({ date, block }) },
       'Log your first meal'
+    )
+  )
+}
+
+/**
+ * The plain X in a card's corner, and the 44pt behind it.
+ *
+ * The box is drawn at 44 and sits 4px in from the card's edges, which puts the
+ * glyph's centre 26px in: level with the 20px content inset, not floating in
+ * the padding. `.tap-44` is not used because it sets `position: relative`, and
+ * this has to be absolute.
+ */
+function dismissButton(onDismiss) {
+  return h(
+    'button',
+    {
+      class:
+        'absolute top-[4px] right-[4px] flex h-[44px] w-[44px] items-center justify-center text-muted',
+      'aria-label': 'Dismiss',
+      onclick: onDismiss,
+    },
+    icon('close', { size: 18 })
+  )
+}
+
+/**
+ * The install step, directly under the dashboard.
+ *
+ * On iOS the app in a Safari tab and the app on the Home Screen are two
+ * different things: only the second is full screen, keeps its place between
+ * opens, and runs with no signal. Safari gives no prompt for it, so this is
+ * the one place the route is spelled out. There is no action button, because
+ * the action lives in Safari's share sheet and nothing in the page can trigger
+ * it.
+ *
+ * Shown while nothing has ever been logged, on iOS, outside the installed app,
+ * and until it is waved away. The X sets `firstRunSeen`, the same flag the
+ * boot-time toast honours, so dismissing the card is also the end of the
+ * reminder. It is a plain `card`, not a `logCard`: it reads the same on every
+ * day, so it must not wear the day-swap.
+ */
+function installCard(settings, everLogged) {
+  if (everLogged !== null || settings.firstRunSeen || !isIOS() || isStandalone()) return null
+  return card(
+    h(
+      'div',
+      { class: 'relative flex flex-col gap-[10px] px-[20px] py-[20px]' },
+      dismissButton(() => saveSettings({ firstRunSeen: true })),
+      h(
+        'p',
+        { class: 'text-[16px] font-semibold leading-tight pr-[32px]' },
+        'Put it on your Home Screen'
+      ),
+      h(
+        'ol',
+        { class: 'list-decimal pl-[20px] flex flex-col gap-[6px] text-[14px] leading-snug text-muted' },
+        h('li', {}, 'Tap the Share button at the bottom of Safari.'),
+        h('li', {}, 'Scroll down and tap Add to Home Screen.'),
+        h('li', {}, 'Tap Add in the top corner.')
+      ),
+      h(
+        'p',
+        { class: 'text-[14px] leading-snug text-muted' },
+        'Trackd then opens like an app, full screen, and works with no signal.'
+      )
     )
   )
 }
@@ -1051,7 +1121,8 @@ export function todayScreen() {
   const headerSlot = slot()
   const railSlot = slot()
   const logSlot = slot()
-  const column = h('div', { class: 'flex flex-col gap-[20px]' }, deck, railSlot, logSlot)
+  const installSlot = slot()
+  const column = h('div', { class: 'flex flex-col gap-[20px]' }, deck, installSlot, railSlot, logSlot)
   /**
    * The header is a sibling of the column, not a member of it.
    *
@@ -1278,6 +1349,9 @@ export function todayScreen() {
            * carries its own heading, so it is still named and still positioned; what
            * it stops being is the thing between you and the fastest way to log.
            */
+      const firstRun = everLogged === null && !settings.firstMealSeen
+      repaint(installSlot, installCard(settings, everLogged))
+
       repaint(
         railSlot,
         quickAddSection({
@@ -1353,9 +1427,9 @@ export function todayScreen() {
                     ),
                   { dayStep }
                 )
-              : everLogged === null
-                ? // Never logged anything: the card carries the first action.
-                  // See `firstMealCard`.
+              : firstRun
+                ? // Never logged anything, and the card has not been waved
+                  // away. See `firstMealCard`.
                   logCard(
                     state.date,
                     firstMealCard(state.date, blockForTime(new Date(), settings.blockThresholds)),

@@ -292,6 +292,7 @@ function checkSettings(s) {
   if (s.cardMode != null && !CARD_MODES.includes(s.cardMode)) fail(`${where} has an unknown card mode.`)
   if (s.onboardingComplete != null && typeof s.onboardingComplete !== 'boolean') fail(`${where} has a bad onboarding flag.`)
   if (s.firstRunSeen != null && typeof s.firstRunSeen !== 'boolean') fail(`${where} has a bad first-run flag.`)
+  if (s.firstMealSeen != null && typeof s.firstMealSeen !== 'boolean') fail(`${where} has a bad first-meal flag.`)
   if (s.trendWindow != null && !(Number.isInteger(s.trendWindow) && s.trendWindow > 0)) fail(`${where} has a bad trend window.`)
 
   if (s.blockNames != null) {

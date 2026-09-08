@@ -77,6 +77,7 @@ export const DEFAULT_SETTINGS = {
   /** Ordered and manual. These do not re-sort themselves — that is the point. */
   favourites: [],
   firstRunSeen: false,
+  firstMealSeen: false,
 }
 
 export const uid = () =>
