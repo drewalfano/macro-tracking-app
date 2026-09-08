@@ -22,14 +22,13 @@ import {
   textInput,
   labelledField,
   notice,
-  rowChevron,
   switchRow,
 } from '../lib/ui.js'
 import { round, pluralize } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
 import { getAiKey, setAiKey, clearAiKey, getAiMode, setAiMode } from '../lib/aiKey.js'
-import { VERSION, BUILD_ID, REPO_URL } from '../config.js'
+import { VERSION, BUILD_ID } from '../config.js'
 import { readViewport, formatViewport, readCaptures } from '../lib/viewportProbe.js'
 
 /**
@@ -647,13 +646,7 @@ export function aboutScreen() {
             subtitle: 'What the screen measures on this device',
             chevron: true,
             onclick: () => navigate('settings/viewport'),
-          }),
-          h(
-            'a',
-            { class: 'row', href: REPO_URL, target: '_blank', rel: 'noreferrer noopener' },
-            h('span', { class: 'flex-1 text-[16px] font-semibold' }, 'Source code'),
-            rowChevron()
-          )
+          })
         ),
 
         /**
