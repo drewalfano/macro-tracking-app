@@ -78,7 +78,7 @@ const stem = (word) => word.replace(/(ies)$/, 'y').replace(/(es|s)$/, '')
  * the trade this feature is built on — a row that admits it does not know is
  * fixable in two taps, and a confidently wrong row is one you have to catch.
  */
-export function offLooksRight(phrase, draft) {
+export function offLooksRight(phrase, draft, { strict = false } = {}) {
   const wanted = terms(phrase).map(stem)
   if (!wanted.length) return false
 
@@ -87,6 +87,20 @@ export function offLooksRight(phrase, draft) {
 
   const overlaps = (t) => wanted.some((w) => w.includes(t) || t.includes(w))
   if (!nameTerms.some(overlaps)) return false
+
+  /**
+   * `strict` is for a phrase that names a branded product, and it runs the
+   * test in the other direction as well: the LAST word of what was written
+   * has to be somewhere in the product's name. "Tim Hortons Spinach & Egg
+   * White Bites" against a carton of Egg White passes the head-noun test
+   * below — white is right there in the phrase — and it is not the food. A
+   * generic product is never assumed to be an exact branded match; the bites
+   * have to be bites.
+   */
+  if (strict) {
+    const head = wanted[wanted.length - 1]
+    if (!nameTerms.some((t) => t.includes(head) || head.includes(t))) return false
+  }
 
   /**
    * Open Food Facts names are comma-separated attribute lists rather than
@@ -131,9 +145,28 @@ export function singular(phrase) {
 }
 
 /**
+ * Whether an Open Food Facts product's brand is one of the words written.
+ * Used to rank, never to admit: `offLooksRight` still decides what passes.
+ */
+function brandWritten(phrase, draft) {
+  const brand = terms(draft.brand || '')
+  if (!brand.length) return false
+  const wanted = terms(phrase)
+  return brand.some((b) => wanted.includes(b))
+}
+
+/**
+ * @param {string} phrase
+ * @param {object} [opts]
+ * @param {AbortSignal} [opts.signal]
+ * @param {boolean} [opts.local]    the library and the staples table only — no network
+ * @param {boolean} [opts.branded]  the phrase names a branded product: the staples
+ *   table is skipped, since a generic food is never an exact branded match, and
+ *   an Open Food Facts hit has to pass the strict test and prefers the brand
+ *   that was written
  * @returns {Promise<{source: 'library'|'staple'|'off', food?: object, draft?: object}|null>}
  */
-export async function resolvePhrase(phrase, { signal } = {}) {
+export async function resolvePhrase(phrase, { signal, local = false, branded = false } = {}) {
   const text = String(phrase || '').trim()
   if (!text) return null
 
@@ -144,16 +177,19 @@ export async function resolvePhrase(phrase, { signal } = {}) {
     const [found] = await searchFoods(form, 1)
     if (found) return { source: 'library', food: found }
   }
-  for (const form of forms) {
-    const [staple] = await searchStaples(form, 1)
-    if (staple) return { source: 'staple', draft: { ...stapleDraft(staple), name: stapleName(staple) } }
+  if (!branded) {
+    for (const form of forms) {
+      const [staple] = await searchStaples(form, 1)
+      if (staple) return { source: 'staple', draft: { ...stapleDraft(staple), name: stapleName(staple) } }
+    }
   }
 
-  if (!isOnline()) return null
+  if (local || !isOnline()) return null
 
   try {
     const products = await searchProducts(text, { signal, pageSize: 10 })
-    const hit = products.find((r) => offLooksRight(text, r.draft))
+    const passing = products.filter((r) => offLooksRight(text, r.draft, { strict: branded }))
+    const hit = (branded && passing.find((r) => brandWritten(text, r.draft))) || passing[0]
     if (hit) return { source: 'off', draft: hit.draft }
   } catch (err) {
     // A failed lookup is not a failed parse. The row simply arrives needing a
@@ -176,8 +212,12 @@ export async function resolvePhrase(phrase, { signal } = {}) {
  */
 export function classifyItem(item) {
   if (!item) return 'unmatched'
+  // The review's own states, first. None of them survives `stripDraft`, so a
+  // plate item or an entry never reads as any of these.
+  if (item.missing) return 'missing'
+  if (item.pending) return 'pending'
   if (item.computed) return 'estimated'
-  if (!item.foodId && !item.draft) return 'unmatched'
+  if (!item.foodId && !item.draft) return item.ambiguous ? 'ambiguous' : 'unmatched'
   return item.quantity == null ? 'needs-amount' : 'matched'
 }
 
@@ -248,6 +288,71 @@ async function toPlateItem(item, { signal }) {
 
   // Known food, unknown portion. `quantity: null` is the whole signal.
   return { ...base, quantity: null, unit: item.unit, phrase: amountPhrase(item), text: item.text }
+}
+
+/**
+ * The nutrition lookup for one interpreted item.
+ *
+ * This is the second half of the read, and it is kept apart from the first on
+ * purpose: deciding WHAT the foods are (the model, or the rules) and deciding
+ * what each one is WORTH (the library, the staples table, Open Food Facts)
+ * are different questions with different failure modes, and the review shows
+ * them as different states — "Understanding your meal" and then "Finding a
+ * match" on each row.
+ *
+ * Returns a patch for the row rather than a new row, so the row keeps its
+ * identity across the wait: the sheet is holding a reference to it, and so is
+ * anything the person did to it while the lookup ran.
+ *
+ * The order of preference: the library, then a verified database product,
+ * then — only where both have nothing — the estimate the model sent along.
+ * A branded item skips the staples table and holds Open Food Facts to the
+ * strict test, so "Tim Hortons Spinach & Egg White Bites" never lands on a
+ * generic egg white. Resolution before estimation, always.
+ *
+ * @param {object} row  an interpreted row: name, brand, quantity, unit, phrase, estimate
+ * @returns {Promise<object>} fields to assign onto the row
+ */
+export async function lookupItem(row, { signal, lookup = resolvePhrase } = {}) {
+  const branded = Boolean(row.brand) || row.packaged === true
+  const resolved = await lookup(row.name, { signal, branded })
+  // Whatever the row was before — an estimate on a retry, a proposed split on
+  // a confirm — a fresh answer replaces all of it.
+  const cleared = { foodId: null, draft: null, computed: null, ambiguous: false, proposed: null }
+
+  if (resolved) {
+    const record = resolved.food || resolved.draft
+    const base = resolved.food
+      ? { ...cleared, foodId: resolved.food.id }
+      : { ...cleared, draft: resolved.draft, name: resolved.draft.name }
+    const unit = row.unit || 'serving'
+
+    if (row.quantity != null) return { ...base, quantity: row.quantity, unit }
+
+    const remembered = row.phrase ? recallPortion(record, row.phrase) : null
+    if (remembered) return { ...base, quantity: remembered.quantity, unit: remembered.unit }
+
+    // Known food, unknown portion. `quantity: null` is the whole signal.
+    return { ...base, quantity: null, unit }
+  }
+
+  if (row.estimate) {
+    return {
+      ...cleared,
+      quantity: row.quantity ?? 1,
+      unit: row.unit || 'serving',
+      computed: {
+        kcal: Math.round(row.estimate.kcal),
+        protein: Math.round(row.estimate.protein),
+        fat: Math.round(row.estimate.fat),
+        carbs: Math.round(row.estimate.carbs),
+      },
+    }
+  }
+
+  // Nothing found and nothing to estimate from. The row stays exactly as it
+  // was read — including a split it is still waiting to have confirmed.
+  return { foodId: null, draft: null, computed: null }
 }
 
 /**
