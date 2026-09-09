@@ -1835,6 +1835,7 @@
    * instead of inverting into a tall pill.
    */
   .cal-day {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1856,6 +1857,41 @@
      note on `monthCells` — but not what this month is about. */
   .cal-day[data-outside='true'] {
     color: var(--color-muted);
+  }
+
+  /**
+   * A day with something logged on it.
+   *
+   * The green is `--color-kcal`, the calories colour, because that is what the
+   * dot is about: a day with food on it. It is the one mark in the calendar
+   * that is not the shape of the cell — today's ring and the selected fill both
+   * are — so it can be small and still be the first thing seen, and it sits
+   * under the number rather than beside it so the digits stay centred in a
+   * column of digits.
+   *
+   * 5px, not the 6 the first pass used: at 6 with the number above it the cell
+   * reads as two things stacked, and the mark stops being an annotation on the
+   * day. Bottom-anchored in the cell rather than offset from the type, so it
+   * lands on the same line in every row whatever the digit above it is.
+   *
+   * On the selected day the ground is ink and the green would sit at 2.6:1 on
+   * it, so the dot takes the canvas colour there — the same swap the number
+   * itself makes, for the same reason.
+   */
+  .cal-day[data-logged='true']::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    margin-left: -2.5px;
+    border-radius: 999px;
+    background: var(--color-kcal);
+  }
+
+  .cal-day[data-logged='true'][aria-pressed='true']::after {
+    background: var(--color-canvas);
   }
 
   .cal-day[data-today='true'] {

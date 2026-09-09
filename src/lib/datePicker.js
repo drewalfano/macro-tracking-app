@@ -1,6 +1,7 @@
 import { h, repaint } from './dom.js'
 import { icon } from './icons.js'
 import { fromDateStr, toDateStr, todayStr } from './dates.js'
+import { loggedDatesInRange } from './db.js'
 
 /**
  * A month grid, in the app's own language.
@@ -87,7 +88,23 @@ function monthCells(year, month, first) {
  * after today is a day nothing can have been eaten on, and the two controls
  * should not disagree about that.
  */
-export function datePickerPanel({ value, max = todayStr(), min = null, onPick }) {
+/**
+ * Which days get a dot: `(from, to) => Promise<Set<dateStr>>`, the days in that
+ * range with something logged on them.
+ *
+ * A grid of identical numbers says nothing about where the food is, and picking
+ * through a week to find the day you meant is what the dot saves. Default rather
+ * than a required argument because every picker in the app is picking a day to
+ * look at a log, and one that did not mark them would be the odd one out; `null`
+ * turns them off for a picker where the question does not apply.
+ */
+export function datePickerPanel({
+  value,
+  max = todayStr(),
+  min = null,
+  onPick,
+  marks = loggedDatesInRange,
+}) {
   return {
     title: 'Pick a day',
     render: (ctx) => {
@@ -155,6 +172,45 @@ export function datePickerPanel({ value, max = todayStr(), min = null, onPick })
       )
       ctx.setFooter(jumpToday)
 
+      /**
+       * The marked days, accumulated as months are visited.
+       *
+       * Two sets rather than one: `logged` is every marked day learnt so far,
+       * `loaded` the months already asked about. Without the second, a month
+       * with nothing logged in it would be re-read on every visit, since an
+       * empty answer and an unasked question look the same in the first.
+       *
+       * A month's read covers all 42 cells, so the neighbouring days it shows
+       * come back with it and are not asked for again on their own.
+       */
+      const logged = new Set()
+      const loaded = new Set()
+      /** The month a read was started for; a later one supersedes it. */
+      let marksToken = ''
+
+      async function loadMarks(from, to) {
+        const key = `${year}-${month}`
+        if (!marks || loaded.has(key)) return
+        marksToken = key
+        try {
+          const days = await marks(from, to)
+          loaded.add(key)
+          for (const d of days) logged.add(d)
+        } catch (err) {
+          // A calendar without dots is the calendar as it was. Nothing here is
+          // worth a notice on a sheet the person opened to press one day.
+          console.warn('Could not read which days have entries', err)
+          return
+        }
+        // Paged on while the read was out: those cells are not these cells.
+        if (marksToken !== key || !grid.isConnected) return
+        // A second pass over the month now showing, rather than a dot poked
+        // onto each cell: the marked days say so in their labels as well, and
+        // one paint keeps the two from drifting apart. It re-enters `loadMarks`
+        // and stops at the `loaded` guard above.
+        paint()
+      }
+
       function paint() {
         label.textContent = new Date(year, month, 1).toLocaleDateString(undefined, {
           month: 'long',
@@ -167,9 +223,10 @@ export function datePickerPanel({ value, max = todayStr(), min = null, onPick })
         next.disabled = !!max && toDateStr(new Date(year, month + 1, 1)) > max
         prev.disabled = !!min && toDateStr(new Date(year, month, 0)) < min
 
+        const cells = monthCells(year, month, first)
         repaint(
           grid,
-          ...monthCells(year, month, first).map((d) => {
+          ...cells.map((d) => {
             const iso = toDateStr(d)
             const outside = d.getMonth() !== month
             const disabled = (max && iso > max) || (min && iso < min)
@@ -181,16 +238,20 @@ export function datePickerPanel({ value, max = todayStr(), min = null, onPick })
                 role: 'gridcell',
                 'data-outside': String(outside),
                 'data-today': String(iso === today),
+                'data-date': iso,
+                'data-logged': String(logged.has(iso)),
                 'aria-pressed': String(iso === selected),
                 'aria-current': iso === today ? 'date' : null,
                 // The visible cell is a bare number, which says nothing on its
                 // own once it is read aloud out of the grid it sits in.
-                'aria-label': d.toLocaleDateString(undefined, {
+                // The dot is the one thing on the cell that is not the number,
+                // so it is the one thing the label has to add to it.
+                'aria-label': `${d.toLocaleDateString(undefined, {
                   weekday: 'long',
                   day: 'numeric',
                   month: 'long',
                   year: 'numeric',
-                }),
+                })}${logged.has(iso) ? '. Logged' : ''}`,
                 disabled,
                 onclick: () => choose(iso),
               },
@@ -198,6 +259,8 @@ export function datePickerPanel({ value, max = todayStr(), min = null, onPick })
             )
           })
         )
+
+        loadMarks(toDateStr(cells[0]), toDateStr(cells[cells.length - 1]))
       }
 
       paint()
