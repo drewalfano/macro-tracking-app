@@ -261,17 +261,46 @@ export function describePanel({ date = todayStr(), block: initialBlock, onLogged
       const describeStatus = slot()
       const modeLine = h('p', { class: 'px-0 text-[12px] leading-snug text-muted' }, modeCopy())
 
-      const reviewBtn = h('button', { class: 'btn-primary', onclick: () => review() }, 'Review meal')
+      const reviewBtn = h('button', {
+        class: 'btn-primary',
+        onclick: () => review(),
+        /**
+         * Pressing it must not close the keyboard, which is the whole point of
+         * moving it up here: a blur would hide the keys, the sheet would grow
+         * back to full height, and this button would be moved to the footer
+         * between the finger going down and coming up — so the tap would land
+         * on whatever the sheet put in its place. Declining the focus change
+         * keeps the caret in the field and the button under the thumb. Harmless
+         * in the footer, where the field is not focused anyway.
+         */
+        onmousedown: (e) => e.preventDefault(),
+      }, 'Review meal')
 
       function syncReviewBtn() {
         reviewBtn.disabled = working || !text.trim()
       }
+
+      /**
+       * Where "Review meal" sits while the keyboard is up.
+       *
+       * The sheet lifts its bottom edge clear of the keys, so the floating
+       * footer is not buried — but it is at the far end of a sheet that is now
+       * mostly field, and reaching it means dismissing the keyboard to be sure
+       * of where it went. The button belongs next to the words being typed:
+       * finish the sentence, press the thing directly under it, keys still up.
+       *
+       * Filled and emptied by `placeReviewBtn`, which owns the one button and
+       * moves it between here and the footer. Empty the rest of the time, so
+       * the gap it would leave collapses.
+       */
+      const inlineFooter = h('div', { class: 'flex flex-col empty:hidden' })
 
       const describeView = h(
         'div',
         { class: 'flex flex-col gap-[20px]' },
         h('h3', { class: 'text-[20px] font-semibold leading-tight tracking-[-0.01em]' }, 'What did you eat?'),
         field,
+        inlineFooter,
         describeStatus,
         modeLine
       )
@@ -374,6 +403,28 @@ export function describePanel({ date = todayStr(), block: initialBlock, onLogged
         window.removeEventListener('resize', onViewport)
       })
 
+      /**
+       * The primary button has one home at a time: under the field while the
+       * keyboard is up on the describe state, in the sheet's footer otherwise.
+       * Moving the node rather than making a second one keeps `syncReviewBtn`
+       * and the wait's label rewrite pointing at the button that is on screen.
+       *
+       * The review state keeps its footer either way — its keyboard, when one
+       * opens at all, belongs to a number in a row rather than to the button.
+       */
+      function placeReviewBtn() {
+        const inline = stage !== 'review' && ctx.keyboardOpen()
+        if (inline) {
+          if (reviewBtn.parentNode !== inlineFooter) inlineFooter.replaceChildren(reviewBtn)
+          ctx.setFooter(null)
+        } else {
+          inlineFooter.replaceChildren()
+          ctx.setFooter(stage === 'review' ? reviewFooter : reviewBtn)
+        }
+        scheduleFit()
+      }
+      ctx.onKeyboard(() => placeReviewBtn())
+
       function showStage(next) {
         stage = next
         const toReview = next === 'review'
@@ -384,10 +435,14 @@ export function describePanel({ date = todayStr(), block: initialBlock, onLogged
         // just arrived. Never both, so the two cannot argue.
         replay(toReview ? reviewView : describeView, 'panel-in')
         ctx.setTitle(toReview ? 'Review' : 'Describe')
-        ctx.setFooter(toReview ? reviewFooter : reviewBtn)
+        placeReviewBtn()
         ctx.body.scrollTop = 0
         scheduleFit()
-        if (!toReview) {
+        if (toReview) {
+          // The rows are read, not typed. Nothing here wants the keyboard, and
+          // it was only still up because the button declines to blur the field.
+          field.input.blur()
+        } else {
           syncReviewBtn()
           // Back to the words to change them, so the caret goes there.
           field.input.focus({ preventScroll: true })
@@ -1200,7 +1255,7 @@ export function describePanel({ date = todayStr(), block: initialBlock, onLogged
 
       /* ---------------------------------------------------------------- boot */
 
-      ctx.setFooter(reviewBtn)
+      placeReviewBtn()
       syncReviewBtn()
       scheduleFit()
       // The sheet's own arrival is 320ms; a fit taken mid-slide reads a box
