@@ -1613,10 +1613,15 @@
       transform var(--dur-press) var(--ease-out),
       opacity var(--dur-press) ease-out;
   }
-  .chip-sm:active,
-  .chip-sm[data-pressed='true'] {
+  .chip-sm:active:not(:disabled),
+  .chip-sm[data-pressed='true']:not(:disabled) {
     transform: scale(var(--press-scale-sm));
     opacity: var(--press-dim);
+  }
+  /* The same dim `.icon-btn` takes: a chip that cannot be pressed yet is
+     still the chip it will be, only quieter. */
+  .chip-sm:disabled {
+    opacity: 0.3;
   }
 
   /**
@@ -3446,6 +3451,46 @@
   .sparkle-wait > svg:last-child {
     transform-origin: 75% 75%;
     animation: sparkle-small 1250ms var(--ease-loop) -580ms infinite;
+  }
+
+  /* ------------------------------------------------------ the lookup ring */
+
+  /**
+   * The mark that says a row is being looked up.
+   *
+   * A ring, not the sparkle. The sparkle means a MODEL is being waited on,
+   * and the note above says why it should never be read as progress. This is
+   * a different wait for a different thing — the library, the staples table,
+   * Open Food Facts — and it sits on the row it is about, in the slot the
+   * chevron takes once the row has settled. Giving a database lookup the
+   * model's mark would put a sparkle on every row of a meal that never went
+   * near a model, which is the repeated branding the review was cleared of.
+   *
+   * Drawn from the app's own two strokes: the track is the outline tone, the
+   * arc is ink, and the width is the icon stroke. 18px, the chevron's size,
+   * so the row does not change height when one replaces the other.
+   *
+   * The blanket reduced-motion rule at the foot of this file parks it: an arc
+   * that does not turn still reads as "not finished", which is all it claims.
+   */
+  @keyframes spinner-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1.75px solid var(--color-outline);
+    border-top-color: var(--color-ink);
+    animation: spinner-turn 900ms linear infinite;
+  }
+  .spinner-sm {
+    width: 14px;
+    height: 14px;
+    border-width: 1.5px;
   }
 }
 

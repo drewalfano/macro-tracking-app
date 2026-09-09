@@ -112,13 +112,21 @@ export function replaceSent(items, sentIds, replacements) {
  * not opinions the app is unsure about, they are blanks.
  */
 export function draftStatus(items) {
-  const counts = { matched: 0, estimated: 0, 'needs-amount': 0, unmatched: 0, missing: 0 }
+  const counts = {
+    matched: 0,
+    estimated: 0,
+    'needs-amount': 0,
+    unmatched: 0,
+    ambiguous: 0,
+    pending: 0,
+    missing: 0,
+  }
   for (const item of items) {
-    const state = item.missing ? 'missing' : classifyItem(item)
+    const state = classifyItem(item)
     counts[state] = (counts[state] || 0) + 1
   }
   const ready = counts.matched + counts.estimated
-  const blocked = counts.unmatched + counts['needs-amount']
+  const blocked = counts.unmatched + counts.ambiguous + counts['needs-amount'] + counts.pending
   return {
     ...counts,
     ready,
@@ -128,13 +136,21 @@ export function draftStatus(items) {
   }
 }
 
-/** One sentence naming what is in the way, or null when nothing is. */
+/**
+ * One sentence naming what is in the way, or null when nothing is.
+ *
+ * A lookup still running comes first and alone: while anything is still
+ * being checked the other counts are not final, and naming them would be
+ * asking for a fix to something that may settle itself in a second.
+ */
 function blockedReason(counts, ready) {
+  if (counts.pending) {
+    return counts.pending === 1 ? 'Still checking 1 item.' : `Still checking ${counts.pending} items.`
+  }
   const parts = []
-  if (counts.unmatched) {
-    parts.push(
-      counts.unmatched === 1 ? '1 item needs a food' : `${counts.unmatched} items need a food`
-    )
+  const needFood = counts.unmatched + counts.ambiguous
+  if (needFood) {
+    parts.push(needFood === 1 ? '1 item needs a food' : `${needFood} items need a food`)
   }
   if (counts['needs-amount']) {
     parts.push(
@@ -146,6 +162,68 @@ function blockedReason(counts, ready) {
   if (parts.length) return parts.join(' and ') + '.'
   if (!ready) return 'Nothing to log yet.'
   return null
+}
+
+/**
+ * The rows sorted into the three groups the review shows.
+ *
+ * `pending` is still being looked up. `attention` is settled and needs a
+ * hand — no food, no amount, an unconfirmed split, a deleted food. `ready`
+ * counts towards the total and can be logged. Sentence order is kept within
+ * each group, and the review shows headings only when more than one group
+ * has anything in it: a list that is all one thing does not need to say so.
+ */
+export function groupRows(items) {
+  const groups = { pending: [], attention: [], ready: [] }
+  for (const item of items) {
+    const state = classifyItem(item)
+    if (state === 'pending') groups.pending.push(item)
+    else if (state === 'matched' || state === 'estimated') groups.ready.push(item)
+    else groups.attention.push(item)
+  }
+  return groups
+}
+
+/**
+ * What the meal adds up to, counting only what is actually known.
+ *
+ * `macrosOf` is handed in because the sheet is the thing holding the library
+ * records; this file never reads the store. A row that is pending, unmatched
+ * or without an amount contributes nothing — and says so through `confirmed`
+ * and `pending`, so the tile can call the number a subtotal while it is one.
+ */
+export function describeTotals(items, macrosOf) {
+  let totals = { kcal: 0, protein: 0, fat: 0, carbs: 0 }
+  let confirmed = 0
+  let pending = 0
+  let estimates = 0
+  let unresolved = 0
+  for (const item of items) {
+    const state = classifyItem(item)
+    if (state === 'missing') continue
+    if (state === 'pending') {
+      pending++
+      continue
+    }
+    if (state !== 'matched' && state !== 'estimated') {
+      unresolved++
+      continue
+    }
+    const m = macrosOf(item)
+    if (!m) {
+      unresolved++
+      continue
+    }
+    totals = {
+      kcal: totals.kcal + (m.kcal || 0),
+      protein: totals.protein + (m.protein || 0),
+      fat: totals.fat + (m.fat || 0),
+      carbs: totals.carbs + (m.carbs || 0),
+    }
+    confirmed++
+    if (state === 'estimated') estimates++
+  }
+  return { totals, confirmed, pending, estimates, unresolved, partial: pending + unresolved > 0 }
 }
 
 /**
@@ -176,7 +254,23 @@ export function mergeIntoPlate(plateItems, draftTag, items) {
 
 /** What leaves the draft: the plate item, without the review's own bookkeeping. */
 export function stripDraft(item) {
-  const { id, key, fixed, pending, missing, base, ...rest } = item
+  const {
+    id,
+    key,
+    fixed,
+    pending,
+    missing,
+    base,
+    failed,
+    lookup,
+    estimate,
+    ambiguous,
+    proposed,
+    brand,
+    modifiers,
+    packaged,
+    ...rest
+  } = item
   return rest
 }
 

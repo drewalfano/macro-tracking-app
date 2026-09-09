@@ -304,8 +304,8 @@ export function aiDescribeScreen() {
       const sendSlot = h('div', { class: 'empty:hidden' })
       const sendSwitch = () =>
         switchRow({
-          label: 'Send unmatched foods to Gemini',
-          hint: 'Only the words it could not place leave the phone.',
+          label: 'Send descriptions to Gemini',
+          hint: 'Only the words you typed leave the phone.',
           checked: getAiMode() === 'on',
           onChange: (on) => {
             setAiMode(on ? 'on' : 'off')
@@ -351,7 +351,7 @@ export function aiDescribeScreen() {
           h(
             'p',
             { class: 'text-[12px] leading-snug text-muted' },
-            'Only the words of foods it cannot place are sent. No date, targets or history. ' +
+            'Only the description you typed is sent. No date, targets or history. ' +
               'The key stays on this phone and is left out of backups.'
           )
         )
