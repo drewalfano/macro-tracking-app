@@ -414,17 +414,24 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
       ? null
       : h('span', { class: 'delta-chip tnum' }, `${signed(kgToUnit(rate, unit))} ${unit} / week`)
 
-  const reading = h(
+  /**
+   * The number says what; the line under it says when. `Today`, then
+   * `Yesterday`, then a date, then `12 days ago` once the date stops being
+   * the useful fact about it — see `formatDayAge`. A reading with no date is
+   * a number the page cannot vouch for.
+   */
+  const number = h(
     'div',
-    { class: 'flex min-w-0 flex-col gap-[6px]' },
+    { class: 'flex flex-col gap-[2px]' },
     h(
       'div',
       { class: 'flex items-baseline gap-[4px]' },
       tnum(fmtWeight(latest.kg, unit), 'text-title font-semibold'),
       h('span', { class: 'text-[14px] font-medium text-muted' }, unit),
     ),
-    chip,
+    caption(formatDayAge(latest.date)),
   )
+  const reading = h('div', { class: 'flex min-w-0 flex-col gap-[8px]' }, number, chip)
 
   const spark = enough
     ? sparkline(points)
@@ -456,7 +463,7 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
     logButton.classList.add('w-full', 'justify-center')
     return trendTile(
       tileOpts,
-      h('div', { class: 'flex flex-col gap-[10px]' }, reading.firstChild, logButton),
+      h('div', { class: 'flex flex-col gap-[10px]' }, number, logButton),
     )
   }
 
