@@ -1022,6 +1022,23 @@ export async function moveFavourite(index, delta) {
   await saveSettings({ favourites })
 }
 
+/**
+ * The favourites in the order given, by `type:id` key. Keys that are not
+ * favourites are ignored and favourites not in the list keep their relative
+ * order at the end, so a stale list from a sheet that lost a race with a
+ * toggle cannot drop a pin.
+ */
+export async function setFavouriteOrder(keys) {
+  const settings = await getSettings()
+  const current = [...settings.favourites]
+  const key = (f) => `${f.type}:${f.id}`
+  const byKey = new Map(current.map((f) => [key(f), f]))
+  const ordered = keys.map((k) => byKey.get(k)).filter(Boolean)
+  const seen = new Set(ordered.map(key))
+  const favourites = [...ordered, ...current.filter((f) => !seen.has(key(f)))]
+  await saveSettings({ favourites })
+}
+
 /* ------------------------------------------------------------ export/import */
 
 export async function exportAll() {

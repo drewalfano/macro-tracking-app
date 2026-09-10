@@ -179,22 +179,26 @@ export function reorderable(grid, { handle, onChange, getId = (el) => el.dataset
       raf: 0,
     }
     /**
-     * Every listener that can end the drag goes on the grip, and none of
-     * them looks at the event's target. The finger can lift over a
-     * different tile, capture can be taken away by the browser (a system
-     * gesture, a tab switch, a context menu), and each of those arrives as
-     * a different event on a different target; all of them mean "let go".
-     * `lostpointercapture` is the one that catches the rest.
+     * Capture goes to the GRID, not the grip, and every listener with it.
+     *
+     * The grip was the captured element, and a drag ended itself after one
+     * slot: `moveTo` re-inserts the dragged tile to make room, and removing
+     * a node from the document releases its pointer capture, which arrives
+     * as `lostpointercapture` and reads as "let go". The grid is never moved,
+     * so it holds the capture for the whole gesture and a tile can cross as
+     * many slots as the finger does. `lostpointercapture` still ends the
+     * drag, for the cases it was added for: a system gesture, a tab switch,
+     * a context menu taking the pointer away.
      */
-    grip.addEventListener('pointermove', onMove)
-    grip.addEventListener('pointerup', end)
-    grip.addEventListener('pointercancel', end)
-    grip.addEventListener('lostpointercapture', end)
+    grid.addEventListener('pointermove', onMove)
+    grid.addEventListener('pointerup', end)
+    grid.addEventListener('pointercancel', end)
+    grid.addEventListener('lostpointercapture', end)
     try {
-      grip.setPointerCapture(e.pointerId)
+      grid.setPointerCapture(e.pointerId)
     } catch {
-      // No capture: moves still arrive while the pointer is over the grid.
-      grid.addEventListener('pointermove', onMove)
+      // No capture: moves still arrive while the pointer is over the grid,
+      // and the window catches the release wherever it lands.
       window.addEventListener('pointerup', end, { once: true })
     }
     el.classList.add('is-dragging')
@@ -207,11 +211,11 @@ export function reorderable(grid, { handle, onChange, getId = (el) => el.dataset
     const { el, grip, from, raf } = drag
     cancelAnimationFrame(raf)
     drag = null
-    grip.removeEventListener('pointermove', onMove)
-    grip.removeEventListener('pointerup', end)
-    grip.removeEventListener('pointercancel', end)
-    grip.removeEventListener('lostpointercapture', end)
     grid.removeEventListener('pointermove', onMove)
+    grid.removeEventListener('pointerup', end)
+    grid.removeEventListener('pointercancel', end)
+    grid.removeEventListener('lostpointercapture', end)
+    window.removeEventListener('pointerup', end)
     el.classList.remove('is-dragging')
     if (reduceMotion()) {
       el.style.transform = ''

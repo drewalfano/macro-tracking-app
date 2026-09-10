@@ -1235,6 +1235,9 @@ export function swipeToDismiss(panel, { scroller, scrim, dim = scrim, onDismiss,
 
   const onStart = (e) => {
     if (done || e.touches.length > 1) return
+    // A touch on a reorder grip belongs to the row it drags, not to the
+    // sheet. Without this a row pulled downward pulled the sheet with it.
+    if (e.target.closest?.('.grip')) return
     const p = e.touches[0]
     startY = lastY = p.clientY
     startX = p.clientX

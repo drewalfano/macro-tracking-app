@@ -1,5 +1,6 @@
 import { h } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
+import { reorderable } from '../lib/reorder.js'
 import { openSheet } from '../lib/sheet.js'
 import { toast, confirm } from '../lib/toast.js'
 import {
@@ -9,7 +10,7 @@ import {
   getMeal,
   putMeal,
   deleteMeal,
-  moveFavourite,
+  setFavouriteOrder,
   toggleFavourite,
 } from '../lib/db.js'
 import { card, emptyRow, textInput } from '../lib/ui.js'
@@ -25,61 +26,54 @@ import { pluralize, displayName, stripBrand } from '../lib/format.js'
  * inside the screen that used to own them.
  */
 
+/**
+ * Pinned foods and meals, in the order the add sheet shows them.
+ *
+ * **Reorder is the Trends grid's drag, on rows.** It was a pair of up and
+ * down buttons per row, which moved a pin one slot per tap and put three
+ * circles on every row of a list whose job is to be read. A Reorder chip
+ * above the card turns the list into the same edit mode the tiles have: a
+ * grip per row, drag it anywhere, the others slide out of the way, Done
+ * saves the order once. Unpin stays on the row outside edit mode, where it
+ * is the only control and reads as one.
+ */
 export function favouritesSheet() {
   return openSheet({
     title: 'Favourites',
     render: () => {
       const list = h('div')
+      let editing = false
+      let sortable = null
 
-      async function paint() {
-        const settings = await getSettings()
-        const rows = []
-        for (const [index, fav] of settings.favourites.entries()) {
-          const item = fav.type === 'food' ? await getFood(fav.id) : await getMeal(fav.id)
-          if (!item) continue
-          rows.push(
+      const rowFor = (fav, item) =>
+        h(
+          'div',
+          { class: 'row reorder-row', dataset: { fav: `${fav.type}:${fav.id}` } },
+          h(
+            'div',
+            { class: 'min-w-0 flex-1' },
             h(
               'div',
-              { class: 'row' },
-              h(
-                'div',
-                { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[14px] font-semibold' }, displayName(stripBrand(item.name, item.brand))),
-                h(
-                  'div',
-                  { class: 'text-[12px] text-muted' },
-                  fav.type === 'meal' ? pluralize(item.items.length, 'item') : 'Food'
-                )
-              ),
-              h(
+              { class: 'truncate text-[14px] font-semibold' },
+              displayName(stripBrand(item.name, item.brand)),
+            ),
+            h(
+              'div',
+              { class: 'text-[12px] text-muted' },
+              fav.type === 'meal' ? pluralize(item.items.length, 'item') : 'Food',
+            ),
+          ),
+          editing
+            ? h(
                 'button',
                 {
-                  class: 'icon-btn bg-canvas',
-                  'aria-label': 'Move up',
-                  disabled: index === 0,
-                  style: index === 0 ? { opacity: '0.3' } : null,
-                  onclick: async () => {
-                    await moveFavourite(index, -1)
-                    paint()
-                  },
+                  class: 'grip',
+                  type: 'button',
+                  'aria-label': `Reorder ${displayName(stripBrand(item.name, item.brand))}. Use the arrow keys to move it.`,
                 },
-                icon('chevronUp', { size: 18 })
-              ),
-              h(
-                'button',
-                {
-                  class: 'icon-btn bg-canvas',
-                  'aria-label': 'Move down',
-                  disabled: index === settings.favourites.length - 1,
-                  style: index === settings.favourites.length - 1 ? { opacity: '0.3' } : null,
-                  onclick: async () => {
-                    await moveFavourite(index, 1)
-                    paint()
-                  },
-                },
-                icon('chevronDown', { size: 18 })
-              ),
-              h(
+                icon('grip', { size: 20 }),
+              )
+            : h(
                 'button',
                 {
                   class: 'icon-btn bg-canvas',
@@ -89,20 +83,59 @@ export function favouritesSheet() {
                     paint()
                   },
                 },
-                icon('close', { size: 16 })
-              )
-            )
-          )
+                icon('close', { size: 16 }),
+              ),
+        )
+
+      async function paint() {
+        sortable?.destroy()
+        sortable = null
+        const settings = await getSettings()
+        const rows = []
+        for (const fav of settings.favourites) {
+          const item = fav.type === 'food' ? await getFood(fav.id) : await getMeal(fav.id)
+          if (!item) continue
+          rows.push(rowFor(fav, item))
         }
 
+        const box = card(rows.length ? rows : emptyRow('Nothing pinned yet.'))
+        if (editing) {
+          box.dataset.editing = 'true'
+          sortable = reorderable(box, { handle: '.grip' })
+        }
+
+        const chip = h(
+          'button',
+          {
+            class: 'chip-sm',
+            type: 'button',
+            onclick: async () => {
+              if (editing) {
+                const keys = [...box.querySelectorAll('[data-fav]')].map((r) => r.dataset.fav)
+                editing = false
+                await setFavouriteOrder(keys)
+              } else {
+                editing = true
+              }
+              paint()
+            },
+          },
+          editing ? 'Done' : 'Reorder',
+        )
+
         list.replaceChildren(
-          card(rows.length ? rows : emptyRow('Nothing pinned yet.')),
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+            rows.length ? h('div', { class: 'flex justify-end' }, chip) : null,
+            box,
+          ),
           h(
             'p',
             { class: 'px-0 pt-[10px] text-[12px] leading-snug text-muted' },
             'Favourites never re-sort themselves. Fixed positions are what make the tap ' +
-              'muscle memory, so the order here is the order in the add sheet.'
-          )
+              'muscle memory, so the order here is the order in the add sheet.',
+          ),
         )
       }
 

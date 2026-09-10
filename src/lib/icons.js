@@ -85,6 +85,8 @@ const P = {
    */
   chevronLeft: '<path d="M15.5 5l-7 7 7 7"/>',
   chevronRight: '<path d="M8.5 5l7 7-7 7"/>',
+  /** Apple's reorder control: three lines. */
+  grip: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   chevronDown: '<path d="M5 9l7 7 7-7"/>',
   chevronUp: '<path d="M19 15l-7-7-7 7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',

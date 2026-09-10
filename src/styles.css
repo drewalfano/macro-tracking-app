@@ -1476,6 +1476,35 @@
     cursor: grabbing;
   }
 
+  /**
+   * A row in a card that reorders. The card is the offsetParent the drag
+   * measures against, and it must let the lifted row's shadow out while
+   * editing; the row takes the surface so the rows sliding under it do not
+   * show through.
+   */
+  .card[data-editing] {
+    position: relative;
+    overflow: visible;
+  }
+  .reorder-row {
+    transition:
+      scale var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+  .reorder-row.is-dragging {
+    z-index: 2;
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    scale: 1.02;
+    transition: none;
+  }
+  .card[data-editing] .reorder-row {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
   /* The size picker: a pill track at chip scale, the chosen size in ink. */
   .variant-control {
     display: inline-flex;
