@@ -346,7 +346,10 @@ export function trendsScreen() {
           days &&
           caloriesTile({ days, week, targets: settings.targets, onPress: go('trends/calories'), edit: edit('calories') }),
         streak: () =>
-          days && streakTile(streak(days, settings.targets), { onPress: go('trends/consistency'), ...edit('streak') }),
+          days &&
+          // A streak is one number with nothing behind it; the calendar is
+          // Consistency's detail, so only that tile opens it.
+          streakTile(streak(days, settings.targets), edit('streak')),
         consistency: () =>
           days &&
           consistencyTile(consistency(days, settings.targets), { onPress: go('trends/consistency'), ...edit('consistency') }),
