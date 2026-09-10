@@ -4,11 +4,9 @@ import {
   listWeights,
   getSettings,
   saveSettings,
-  entriesInRange,
   firstLoggedDate,
 } from '../lib/db.js'
 import {
-  sumEntries,
   progress,
   weeklyAverages,
   isPartialDay,
@@ -29,11 +27,11 @@ import { kcal, g } from '../lib/format.js'
 import {
   formatDayLabel,
   todayStr,
-  addDays,
   daysBetween,
 } from '../lib/dates.js'
 import { trendsGrid } from '../lib/trendTile.js'
 import { reorderable } from '../lib/reorder.js'
+import { loadDays } from '../lib/days.js'
 import { streak, consistency } from '../lib/streak.js'
 import {
   caloriesTile,
@@ -264,23 +262,6 @@ function dayRow(day, targets) {
   )
 }
 
-/** The last N days as {date, entries, totals}, newest first. */
-async function loadDays(span) {
-  const today = todayStr()
-  const start = addDays(today, -span)
-  const all = await entriesInRange(start, today)
-  const byDate = new Map()
-  for (const entry of all) {
-    if (!byDate.has(entry.date)) byDate.set(entry.date, [])
-    byDate.get(entry.date).push(entry)
-  }
-  return Array.from({ length: span + 1 }, (_, i) => {
-    const date = addDays(today, -i)
-    const entries = byDate.get(date) || []
-    return { date, entries, totals: sumEntries(entries) }
-  })
-}
-
 /** Every tile the grid can show, in the order a fresh install gets. */
 const TILE_IDS = ['calories', 'streak', 'consistency', 'macros', 'weight']
 
@@ -349,6 +330,7 @@ export function trendsScreen() {
 
       /* ------------------------------------------------------------ grid */
 
+      const go = (path) => () => navigate(path)
       const arranged = draft || normaliseTiles(settings.trendsTiles)
       const editing = !!draft
       const edit = (id) => ({
@@ -360,10 +342,16 @@ export function trendsScreen() {
         },
       })
       const build = {
-        calories: () => days && caloriesTile({ days, week, targets: settings.targets, edit: edit('calories') }),
-        streak: () => days && streakTile(streak(days, settings.targets), edit('streak')),
-        consistency: () => days && consistencyTile(consistency(days, settings.targets), edit('consistency')),
-        macros: () => days && macrosTile({ week, targets: settings.targets, edit: edit('macros') }),
+        calories: () =>
+          days &&
+          caloriesTile({ days, week, targets: settings.targets, onPress: go('trends/calories'), edit: edit('calories') }),
+        streak: () =>
+          days && streakTile(streak(days, settings.targets), { onPress: go('trends/consistency'), ...edit('streak') }),
+        consistency: () =>
+          days &&
+          consistencyTile(consistency(days, settings.targets), { onPress: go('trends/consistency'), ...edit('consistency') }),
+        macros: () =>
+          days && macrosTile({ week, targets: settings.targets, onPress: go('trends/macros'), edit: edit('macros') }),
         weight: () =>
           weightTile({ weights, settings, onPress: () => navigate('trends/weight'), edit: edit('weight') }),
       }

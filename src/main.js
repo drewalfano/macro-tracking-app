@@ -17,6 +17,9 @@ import { todayScreen } from './screens/today.js'
 import { openLogSheet } from './sheets/log.js'
 import { trendsScreen } from './screens/trends.js'
 import { weightScreen } from './screens/weight.js'
+import { consistencyScreen } from './screens/consistency.js'
+import { caloriesScreen } from './screens/calories.js'
+import { macrosScreen } from './screens/macros.js'
 import { settingsScreen } from './screens/settings.js'
 import { suggestTargetScreen } from './screens/suggestTarget.js'
 import {
@@ -381,6 +384,9 @@ function defineRoutes() {
    * place rather than on the router's catch-all.
    */
   route('trends/weight', () => show(weightScreen))
+  route('trends/consistency', () => show(consistencyScreen))
+  route('trends/calories', () => show(caloriesScreen))
+  route('trends/macros', () => show(macrosScreen))
   route('weight', () => navigate('trends/weight', { replace: true }))
   route('history', () => navigate('trends', { replace: true }))
   route('settings', () => show(settingsScreen))

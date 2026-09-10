@@ -1373,7 +1373,8 @@
    * the digits stay readable where the mean line crosses them, which on a
    * flat week is most of them.
    */
-  .trend-tile .chart-label {
+  .trend-tile .chart-label,
+  .day-card .chart-label {
     font-size: 11px;
     fill: var(--color-muted);
   }
@@ -1385,7 +1386,14 @@
     stroke-width: 3px;
     stroke-linejoin: round;
   }
-  .trend-tile .chart-mean {
+  .chart-halo {
+    paint-order: stroke fill;
+    stroke: var(--color-surface);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .trend-tile .chart-mean,
+  .day-card .chart-mean {
     stroke: var(--color-ink);
     stroke-width: 1;
     stroke-dasharray: 4 4;
@@ -1500,6 +1508,46 @@
     background: var(--color-surface);
     color: var(--color-ink);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  /* ------------------------------------------------------- consistency */
+
+  /* Twelve rows of seven dots with a week label at the left. Ink, not a
+     macro hue: consistency is not a macro. */
+  .cal-row {
+    display: grid;
+    grid-template-columns: 52px repeat(7, 1fr);
+    align-items: center;
+    justify-items: center;
+    gap: 6px;
+  }
+  .cal-label,
+  .cal-head {
+    justify-self: start;
+    font-size: 12px;
+    color: var(--color-muted);
+  }
+  .cal-head {
+    justify-self: center;
+    font-weight: 600;
+  }
+  .cal-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    box-sizing: border-box;
+  }
+  .cal-dot[data-state='full'] {
+    background: var(--color-ink);
+  }
+  .cal-dot[data-state='partial'] {
+    background: color-mix(in srgb, var(--color-ink) 30%, transparent);
+  }
+  .cal-dot[data-state='none'] {
+    border: 1.5px solid var(--color-outline);
+  }
+  .cal-dot[data-state='future'] {
+    visibility: hidden;
   }
 
   /* -------------------------------------------------------------- day card */

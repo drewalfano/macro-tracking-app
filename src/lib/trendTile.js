@@ -1,5 +1,5 @@
 import { h, s } from './dom.js'
-import { rowChevron } from './ui.js'
+import { rowChevron, backRow } from './ui.js'
 
 /**
  * One tile on the Trends grid.
@@ -159,4 +159,28 @@ export function trendTile(
  */
 export function trendsGrid(tiles) {
   return h('div', { class: 'trends-grid' }, ...tiles)
+}
+
+/**
+ * A page one level under Trends: the back row, a title, an optional control
+ * beside it. The weight page set the shape and the rest follow it, so
+ * there is one way down and one way back.
+ */
+export function trendsPage({ title, right = null, onBack }, ...children) {
+  return h(
+    'div',
+    {},
+    h(
+      'div',
+      { class: 'flex flex-col gap-[20px] pb-[20px]' },
+      backRow({ label: 'Trends', onclick: onBack }),
+      h(
+        'div',
+        { class: 'flex items-center justify-between gap-[10px]' },
+        h('h1', { class: 'text-title font-semibold leading-tight' }, title),
+        right,
+      ),
+    ),
+    h('div', { class: 'flex flex-col gap-[20px] pb-[20px]' }, ...children),
+  )
 }

@@ -567,6 +567,28 @@ eq('no two rows start in the same place', new Set(shifts).size, shifts.length)
   eq('no block falls back to the clock', D.entryWhen(e(undefined, at(9)), S), D.formatTime(at(9)))
 }
 
+/* --------------------------------------------------------------- insights */
+{
+  const I = await import(R + 'insights.js')
+  const T = { kcal: 2000, protein: 150, fat: 70, carbs: 250 }
+  const dayOn = (date, kcal, protein = 160) => ({ date, entries: [{ block: 'morning', foodName: 'A', computed: { kcal, protein } }, { block: 'night', foodName: 'B', computed: { kcal: 0, protein: 0 } }], totals: { kcal, protein } })
+  const dayOff = (date) => ({ date, entries: [], totals: { kcal: 0, protein: 0 } })
+  const dayPart = (date) => ({ date, entries: [{ block: 'morning', foodName: 'A', computed: { kcal: 300, protein: 20 } }], totals: { kcal: 300, protein: 20 } })
+  eq('day state', [dayOn('2026-09-10', 2000), dayPart('2026-09-09'), dayOff('2026-09-08')].map((d) => I.dayState(d, T)), ['full', 'partial', 'none'])
+  // 2026-09-10 is a Thursday.
+  const days = [dayOn('2026-09-10', 2000), dayOff('2026-09-09'), dayOn('2026-09-08', 2400), dayOn('2026-09-03', 1600)]
+  const thu = I.weekdayStats(days, T)[3]
+  eq('weekday stats count that weekday and average its full days', thu, { label: 'Thu', of: 2, full: 2, kcal: 1800 })
+  eq('a weekday with no full day has no mean', I.weekdayStats(days, T)[2].kcal, null)
+  const week = Array.from({ length: 14 }, (_, i) => (i % 2 ? dayOff(`2026-08-${String(31 - i).padStart(2, '0')}`) : dayOn(`2026-08-${String(31 - i).padStart(2, '0')}`, 2000 + i)))
+  const means = I.weeklyMeans(week, T, 2)
+  eq('two rolling weeks', means.length, 2)
+  eq('a week states its full days', means[0].complete, 4)
+  eq('protein hits count full days only', I.targetHits([dayOn('2026-09-10', 2000, 160), dayOn('2026-09-09', 2000, 100), dayPart('2026-09-08')], T, 'protein'), { hit: 1, of: 2 })
+  const top = I.topSources([dayOn('2026-09-10', 2000, 160), dayOn('2026-09-09', 2000, 160)], 'kcal', 5)
+  eq('top sources sum by name with share', top.map((r) => [r.name, r.amount, r.times, Math.round(r.share * 100)]), [['A', 4000, 2, 100]])
+}
+
 // The summary stays last so every block above it is counted.
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
