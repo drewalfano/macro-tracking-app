@@ -250,3 +250,82 @@ export async function openWeighInSheet({ day = null } = {}) {
     },
   })
 }
+
+/**
+ * Today's weight as one card: a field, a Save that becomes Update once the
+ * day has a value, and the line that says saving twice replaces rather than
+ * adds. It is the entry block the Weight page shows at its foot, and the
+ * whole of the sheet the Trends tile's Log button opens, so the two are one
+ * function rather than a card and its copy.
+ *
+ * `onSaved` is what differs: the page has nothing to do after a save because
+ * it is watching the store, the sheet closes.
+ */
+export function todayWeightCard({ unit, today, todayEntry, onSaved = null }) {
+  let draft = todayEntry ? String(kgToUnit(todayEntry.kg, unit).toFixed(1)) : ''
+  const saveBtn = h(
+    'button',
+    {
+      class: 'btn-primary btn-compact',
+      disabled: !draft,
+      onclick: async () => {
+        const value = Number(draft)
+        if (!(value > 0)) return
+        await putWeight(today, unitToKg(value, unit))
+        toast(todayEntry ? 'Weight updated' : 'Weight saved')
+        onSaved?.()
+      },
+    },
+    todayEntry ? 'Update' : 'Save',
+  )
+
+  const input = numberInput({
+    value: draft,
+    suffix: unit,
+    placeholder: '—',
+    step: '0.1',
+    onInput: (v) => {
+      draft = v
+      saveBtn.disabled = !(Number(v) > 0)
+    },
+  })
+
+  return card(
+    h(
+      'div',
+      // The plain 20 all round, which is what a card's inset is.
+      { class: 'flex flex-col gap-[10px] px-[20px] py-[20px]' },
+      h(
+        'div',
+        { class: 'flex items-center gap-[10px]' },
+        h('div', { class: 'min-w-0 flex-1' }, input),
+        saveBtn,
+      ),
+      /**
+       * Shown whether or not today already has a value. The thing it answers
+       * is "what happens if I weigh myself twice today", and that question
+       * arrives BEFORE the first save, not after.
+       */
+      h(
+        'p',
+        { class: 'text-[12px] text-muted' },
+        'Saving again replaces today’s value rather than adding a second one.',
+      ),
+    ),
+  )
+}
+
+/**
+ * The Log button's sheet: today's card and nothing else. Not the list, not
+ * the day editor. A tap that said Log gets a field to type in and a button
+ * to press, and the sheet leaves on the save.
+ */
+export async function openTodayWeightSheet() {
+  const today = todayStr()
+  const [settings, todayEntry] = await Promise.all([getSettings(), getWeight(today)])
+  const unit = settings.weightUnit
+  return openSheet({
+    title: 'Today’s weight',
+    render: (ctx) => todayWeightCard({ unit, today, todayEntry, onSaved: () => ctx.close() }),
+  })
+}

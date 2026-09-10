@@ -38,7 +38,7 @@ import {
 } from '../lib/format.js'
 import { formatDayAge, todayStr } from '../lib/dates.js'
 import { toast } from '../lib/toast.js'
-import { openWeighInSheet } from '../sheets/weighIn.js'
+import { openWeighInSheet, todayWeightCard } from '../sheets/weighIn.js'
 import { navigate } from '../router.js'
 
 /**
@@ -402,110 +402,11 @@ export function weightScreen() {
         }, CHART_SWAP_MS)
       }
 
-      /* ----------------------------------------------------------- input */
-
-      let draft = todayEntry ? String(kgToUnit(todayEntry.kg, unit).toFixed(1)) : ''
-      const saveBtn = h(
-        'button',
-        {
-          class: 'btn-primary btn-compact',
-          disabled: !draft,
-          onclick: async () => {
-            const value = Number(draft)
-            if (!(value > 0)) return
-            await putWeight(today, unitToKg(value, unit))
-            toast(todayEntry ? 'Weight updated' : 'Weight saved')
-          },
-        },
-        todayEntry ? 'Update' : 'Save',
-      )
-
-      const input = numberInput({
-        value: draft,
-        suffix: unit,
-        placeholder: '—',
-        step: '0.1',
-        onInput: (v) => {
-          draft = v
-          saveBtn.disabled = !(Number(v) > 0)
-        },
-      })
-
-      /**
-       * The controls sit in a tile, like every other group on this screen.
-       *
-       * They used to sit bare on the canvas, which was survivable when this was
-       * a screen about one thing and stopped being so the moment history moved
-       * in underneath: the averages and the day list are both tiles, so the one
-       * group that was not read as unfinished rather than as different.
-       *
-       * The heading stays outside it. That is the app's pattern everywhere —
-       * `Logged` on Today, `History` below — a label on the page, the content in
-       * a card beneath.
-       */
       const entryBlock = h(
         'section',
         { class: 'flex flex-col gap-[10px]' },
-        h(
-          'div',
-          { class: 'section-head' },
-          h('div', { class: 'section-label' }, 'Today’s weight'),
-          /**
-           * No `Remove` chip here any more.
-           *
-           * It deleted today's reading, which is a real thing that `Update`
-           * cannot do — replacing a value is not the same as returning to no
-           * value, and the trend recalculates differently. But it was the exact
-           * action the weigh-in sheet below already offered: that sheet opened
-           * on today by default, showed today's reading, and carried its own
-           * Remove. So this was a second door onto the same room, given
-           * heading-level prominence, for the least common action in the group.
-           */
-          null,
-        ),
-        card(
-          h(
-            'div',
-            {
-              /**
-               * The plain 20 all round, which is what a card's inset is.
-               *
-               * It was briefly 10 at the bottom when the hint was showing, and
-               * that was right for the arrangement it was written against: a
-               * hairline and the `All weigh-ins` row sat underneath, and the
-               * caption needed to be the same apparent distance from that rule
-               * as the row's label was on the other side of it.
-               *
-               * That row has moved up to the section head, so there is no rule
-               * to balance against any more — the group IS the card, and 10
-               * against the card's own edge just reads as cramped.
-               */
-              class: 'flex flex-col gap-[10px] px-[20px] py-[20px]',
-            },
-            h(
-              'div',
-              { class: 'flex items-center gap-[10px]' },
-              h('div', { class: 'min-w-0 flex-1' }, input),
-              saveBtn,
-            ),
-            /**
-             * Shown whether or not today already has a value.
-             *
-             * It was gated on `todayEntry`, on the reading that a line about
-             * replacing today's value has nothing to say until there is one. But
-             * the thing it answers is "what happens if I weigh myself twice
-             * today", and that question arrives BEFORE the first save, not after
-             * — by the time the field says `Update` and holds a number, the
-             * button has already answered it. Gated, the hint was only ever
-             * visible in the one state that did not need it.
-             */
-            h(
-              'p',
-              { class: 'text-[12px] text-muted' },
-              'Saving again replaces today’s value rather than adding a second one.',
-            ),
-          ),
-        ),
+        h('div', { class: 'section-head' }, h('div', { class: 'section-label' }, 'Today’s weight')),
+        todayWeightCard({ unit, today, todayEntry }),
       )
 
       if (!weights.length) {

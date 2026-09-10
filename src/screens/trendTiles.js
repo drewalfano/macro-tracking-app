@@ -4,10 +4,10 @@ import { tnum, macroColor, macroTextColor } from '../lib/ui.js'
 import { macroRing } from '../lib/ring.js'
 import { AVERAGES_MIN_DAYS, isPartialDay } from '../lib/compute.js'
 import { kcal as fmtKcal } from '../lib/format.js'
-import { formatDayShort, formatDayAge, fromDateStr, todayStr } from '../lib/dates.js'
+import { formatDayShort, formatDayAge, fromDateStr } from '../lib/dates.js'
 import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
-import { openWeighInSheet } from '../sheets/weighIn.js'
+import { openTodayWeightSheet } from '../sheets/weighIn.js'
 
 /**
  * The tiles on the Trends grid. Each is a function of the data the screen
@@ -274,7 +274,7 @@ export function weightTile({ weights, settings, onPress }) {
 
   const logButton = h(
     'button',
-    { class: 'btn-primary btn-compact', type: 'button', onclick: () => openWeighInSheet({ day: todayStr() }) },
+    { class: 'btn-primary btn-compact', type: 'button', onclick: () => openTodayWeightSheet() },
     'Log',
   )
 
