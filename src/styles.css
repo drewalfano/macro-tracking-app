@@ -1400,6 +1400,105 @@
     background: var(--color-outline);
   }
 
+  /* ------------------------------------------------------ trends edit mode */
+
+  /* The tiles' offsetParent. reorder.js reads layout from offsetTop, which
+     is measured against this box, so it has to be positioned. */
+  .trends-grid {
+    position: relative;
+  }
+
+  .trend-tile {
+    transition:
+      scale var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+  .trend-tile.is-dragging {
+    z-index: 2;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    scale: 1.03;
+    transition: none;
+  }
+
+  /* Editing: the body is inert and cannot be selected by a long press. */
+  .trends-grid[data-editing] .trend-tile > :not(.trend-tile-head, .variant-control) {
+    pointer-events: none;
+  }
+  .trends-grid[data-editing] .trend-tile {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Apple's reorder control. `touch-action: none` is what lets a finger
+     on it drag the tile instead of scrolling the page. */
+  .grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: -12px -19px -12px 0;
+    border: 0;
+    background: none;
+    color: var(--color-muted);
+    touch-action: none;
+    cursor: grab;
+  }
+  .grip:active {
+    cursor: grabbing;
+  }
+
+  /* The size picker: a pill track at chip scale, the chosen size in ink. */
+  .variant-control {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  }
+  .variant-option {
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 6px 10px;
+    border-radius: 999px;
+    color: var(--color-muted);
+  }
+  /* On a half tile the picker spans the tile in equal segments. */
+  .trend-tile[data-size='half'] .variant-control {
+    display: flex;
+    width: 100%;
+  }
+  .trend-tile[data-size='half'] .variant-option {
+    flex: 1;
+    text-align: center;
+    padding-inline: 6px;
+  }
+  .variant-option[aria-checked='true'] {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Edit tiles / Done, one text button under the grid. */
+  .edit-btn {
+    align-self: center;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-ink);
+    padding: 12px 20px;
+    transition: opacity var(--dur-press) var(--ease-out);
+  }
+  .edit-btn:active {
+    opacity: var(--press-dim);
+  }
+
   /* -------------------------------------------------------------- day card */
 
   /**

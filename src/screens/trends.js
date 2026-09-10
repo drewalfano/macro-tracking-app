@@ -3,6 +3,7 @@ import { createScreen } from '../lib/screen.js'
 import {
   listWeights,
   getSettings,
+  saveSettings,
   entriesInRange,
   firstLoggedDate,
 } from '../lib/db.js'
@@ -32,6 +33,7 @@ import {
   daysBetween,
 } from '../lib/dates.js'
 import { trendsGrid } from '../lib/trendTile.js'
+import { reorderable } from '../lib/reorder.js'
 import { streak, consistency } from '../lib/streak.js'
 import {
   caloriesTile,
@@ -279,9 +281,30 @@ async function loadDays(span) {
   })
 }
 
+/** Every tile the grid can show, in the order a fresh install gets. */
+const TILE_IDS = ['calories', 'streak', 'consistency', 'macros', 'weight']
+
+/**
+ * The stored arrangement made safe to render: unknown ids dropped, missing
+ * ones appended, so a tile added in a later version shows up at the end
+ * without wiping what was arranged.
+ */
+function normaliseTiles(stored) {
+  const known = (stored?.order || []).filter((id) => TILE_IDS.includes(id))
+  const order = [...known, ...TILE_IDS.filter((id) => !known.includes(id))]
+  return { order, variants: { ...(stored?.variants || {}) } }
+}
+
+/**
+ * The arrangement being edited, or null when not editing. Module scope so
+ * a re-render mid-edit (a weigh-in saved from the tile) keeps the mode and
+ * the unsaved order rather than dropping both.
+ */
+let draft = null
+
 export function trendsScreen() {
   return createScreen(
-    async () => {
+    async ({ rerender }) => {
       const [weights, settings, first] = await Promise.all([
         listWeights(),
         getSettings(),
@@ -324,6 +347,65 @@ export function trendsScreen() {
       )
 
 
+      /* ------------------------------------------------------------ grid */
+
+      const arranged = draft || normaliseTiles(settings.trendsTiles)
+      const editing = !!draft
+      const edit = (id) => ({
+        editing,
+        variant: arranged.variants[id],
+        onVariant: (v) => {
+          draft = { ...draft, variants: { ...draft.variants, [id]: v } }
+          rerender()
+        },
+      })
+      const build = {
+        calories: () => days && caloriesTile({ days, week, targets: settings.targets, edit: edit('calories') }),
+        streak: () => days && streakTile(streak(days, settings.targets), edit('streak')),
+        consistency: () => days && consistencyTile(consistency(days, settings.targets), edit('consistency')),
+        macros: () => days && macrosTile({ week, targets: settings.targets, edit: edit('macros') }),
+        weight: () =>
+          weightTile({ weights, settings, onPress: () => navigate('trends/weight'), edit: edit('weight') }),
+      }
+      const grid = trendsGrid(arranged.order.map((id) => build[id]?.()).filter(Boolean))
+
+      let sortable = null
+      if (editing) {
+        grid.dataset.editing = 'true'
+        sortable = reorderable(grid, {
+          handle: '.grip',
+          onChange: (order) => {
+            draft = { ...draft, order }
+          },
+        })
+      }
+
+      /**
+       * One button at the foot, Edit tiles or Done in the same place. Nothing
+       * is saved until Done: the order and the variants live in `draft` while
+       * editing, so a drag settles on screen rather than being rebuilt from
+       * the store the instant it lands, and Done writes the arrangement once.
+       */
+      const editBtn = h(
+        'button',
+        {
+          class: 'edit-btn',
+          type: 'button',
+          onclick: async () => {
+            if (editing) {
+              sortable?.destroy()
+              const next = draft
+              draft = null
+              await saveSettings({ trendsTiles: next })
+            } else {
+              draft = normaliseTiles(settings.trendsTiles)
+              rerender()
+            }
+          },
+        },
+        editing ? 'Done' : 'Edit tiles',
+      )
+
       return h(
         'div',
         {},
@@ -331,15 +413,8 @@ export function trendsScreen() {
         h(
           'div',
           { class: 'flex flex-col gap-[20px] pb-[20px]' },
-          days
-            ? trendsGrid([
-                caloriesTile({ days, week, targets: settings.targets }),
-                streakTile(streak(days, settings.targets)),
-                consistencyTile(consistency(days, settings.targets)),
-                macrosTile({ week, targets: settings.targets }),
-                weightTile({ weights, settings, onPress: () => navigate('trends/weight') }),
-              ])
-            : trendsGrid([weightTile({ weights, settings, onPress: () => navigate('trends/weight') })]),
+          grid,
+          editBtn,
           historySection,
         ),
       )

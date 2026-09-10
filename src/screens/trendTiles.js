@@ -2,8 +2,8 @@ import { h, s } from '../lib/dom.js'
 import { trendTile } from '../lib/trendTile.js'
 import { tnum, macroColor, macroTextColor } from '../lib/ui.js'
 import { macroRing } from '../lib/ring.js'
-import { AVERAGES_MIN_DAYS, isPartialDay } from '../lib/compute.js'
-import { kcal as fmtKcal } from '../lib/format.js'
+import { AVERAGES_MIN_DAYS, isPartialDay, MACRO_META } from '../lib/compute.js'
+import { kcal as fmtKcal, g } from '../lib/format.js'
 import { formatDayShort, formatDayAge, fromDateStr } from '../lib/dates.js'
 import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
@@ -119,9 +119,26 @@ function caloriesChart(days, targets, mean) {
   )
 }
 
-export function caloriesTile({ days, week, targets, onPress }) {
+/**
+ * Sizes, not contents. Small is the reading alone on a half tile, Large is
+ * the whole tile; Medium, where a tile has one, is the full width without
+ * the list. The words are Apple's widget sizes because that is the mental
+ * model: the same thing at three sizes, showing more as it grows.
+ */
+export const SIZES = {
+  small: { value: 'small', label: 'Small' },
+  medium: { value: 'medium', label: 'Medium' },
+  large: { value: 'large', label: 'Large' },
+}
+export const CALORIES_VARIANTS = [SIZES.small, SIZES.large]
+
+/** Large is the bars; Small is the mean alone on a half tile. */
+export function caloriesTile({ days, week, targets, onPress, edit = {} }) {
+  const variant = edit.variant || 'large'
+  const chart = variant === 'large'
   const recent = days.slice(0, 7).reverse()
   const range = `${formatDayShort(recent[0].date)} to ${formatDayShort(recent[recent.length - 1].date)}`
+  const basis = week.partial > 0 ? `${range} · ${week.partial} partial left out` : range
 
   const headline = week.enough
     ? h(
@@ -136,20 +153,24 @@ export function caloriesTile({ days, week, targets, onPress }) {
             { class: 'text-[14px] font-semibold', style: { color: macroTextColor('kcal') } },
             'cal',
           ),
-          caption('average'),
+          chart ? caption('average') : null,
         ),
-        caption(
-          week.partial > 0
-            ? `${range} · ${week.partial} partial left out`
-            : range,
-        ),
+        caption(chart ? basis : `average, ${week.complete} full days`),
       )
     : notEnough(week)
 
   return trendTile(
-    { id: 'calories', title: 'Calories', size: 'full', onPress },
+    {
+      id: 'calories',
+      title: 'Calories',
+      size: chart ? 'full' : 'half',
+      onPress,
+      variants: CALORIES_VARIANTS,
+      ...edit,
+      variant,
+    },
     headline,
-    caloriesChart(recent, targets, week.kcal),
+    chart ? caloriesChart(recent, targets, week.kcal) : null,
   )
 }
 
@@ -164,16 +185,16 @@ function bigNumber(value, label) {
   )
 }
 
-export function streakTile(n) {
+export function streakTile(n, edit = {}) {
   return trendTile(
-    { id: 'streak', title: 'Streak', size: 'half' },
+    { id: 'streak', title: 'Streak', size: 'half', ...edit },
     bigNumber(String(n), n === 1 ? 'full day in a row' : 'full days in a row'),
   )
 }
 
-export function consistencyTile({ pct, logged, of }) {
+export function consistencyTile({ pct, logged, of }, edit = {}) {
   return trendTile(
-    { id: 'consistency', title: 'Consistency', size: 'half' },
+    { id: 'consistency', title: 'Consistency', size: 'half', ...edit },
     bigNumber(`${pct}%`, `${logged} of ${of} days full`),
   )
 }
@@ -186,29 +207,66 @@ export function consistencyTile({ pct, logged, of }) {
  * Today with a different number in it and nothing to relearn. `key` is
  * prefixed so these three do not share the live card's arc memory.
  */
-export function macrosTile({ week, targets, onPress }) {
-  const body = week.enough
-    ? h(
-        'div',
-        { class: 'flex justify-between' },
-        ...['protein', 'fat', 'carbs'].map((macro) =>
-          macroRing({
-            macro,
-            value: week[macro],
-            target: targets[macro],
-            key: `avg:${macro}`,
-          }),
-        ),
-      )
-    : notEnough(week)
+export const MACROS_VARIANTS = [SIZES.small, SIZES.large]
 
-  return trendTile({ id: 'macros', title: 'Macros', size: 'full', onPress }, body)
+export function macrosTile({ week, targets, onPress, edit = {} }) {
+  const variant = edit.variant || 'large'
+  const rings = variant === 'large'
+
+  /** One line per macro: the letter and unit in the hue, the number in ink. */
+  const line = (macro) =>
+    h(
+      'div',
+      { class: 'flex items-baseline gap-[6px]' },
+      h(
+        'span',
+        { class: 'w-[14px] text-[12px] font-semibold', style: { color: macroTextColor(macro) } },
+        MACRO_META[macro].letter,
+      ),
+      tnum(g(week[macro]), 'text-[20px] font-semibold'),
+      h('span', { class: 'text-[12px] font-semibold', style: { color: macroTextColor(macro) } }, 'g'),
+    )
+
+  const body = !week.enough
+    ? notEnough(week)
+    : rings
+      ? h(
+          'div',
+          { class: 'flex justify-between' },
+          ...['protein', 'fat', 'carbs'].map((macro) =>
+            macroRing({
+              macro,
+              value: week[macro],
+              target: targets[macro],
+              key: `avg:${macro}`,
+            }),
+          ),
+        )
+      : h(
+          'div',
+          { class: 'flex flex-col gap-[4px]' },
+          ...['protein', 'fat', 'carbs'].map(line),
+          caption(`average, ${week.complete} full days`),
+        )
+
+  return trendTile(
+    {
+      id: 'macros',
+      title: 'Macros',
+      size: rings ? 'full' : 'half',
+      onPress,
+      variants: MACROS_VARIANTS,
+      ...edit,
+      variant,
+    },
+    body,
+  )
 }
 
 /* ---------------------------------------------------------------- weight */
 
-const SPARK_W = 120
-const SPARK_H = 40
+const SPARK_W = 310
+const SPARK_H = 44
 const SPARK_PAD = 3
 const SPARK_DAYS = 30
 
@@ -234,11 +292,16 @@ function sparkline(points) {
   const last = coords[coords.length - 1]
   return s(
     'svg',
+    /**
+     * Full width and a fixed height. The box stretches to the tile and the
+     * drawing stretches with it, which is fine for a shape with no axis, and
+     * `non-scaling-stroke` keeps the line 2px however far it is stretched.
+     */
     {
       viewBox: `0 0 ${SPARK_W} ${SPARK_H}`,
-      width: SPARK_W,
-      height: SPARK_H,
-      class: 'shrink-0',
+      preserveAspectRatio: 'none',
+      class: 'w-full',
+      style: { height: `${SPARK_H}px` },
       'aria-hidden': 'true',
     },
     s('polyline', {
@@ -246,10 +309,20 @@ function sparkline(points) {
       fill: 'none',
       stroke: 'var(--color-ink)',
       'stroke-width': 2,
+      'vector-effect': 'non-scaling-stroke',
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
     }),
-    s('circle', { cx: last[0].toFixed(1), cy: last[1].toFixed(1), r: 3, fill: 'var(--color-ink)' }),
+    // The end bead would stretch with the box, so it is a stroke of zero
+    // length with a round cap: the cap does not scale.
+    s('polyline', {
+      points: `${last[0].toFixed(1)},${last[1].toFixed(1)} ${last[0].toFixed(1)},${last[1].toFixed(1)}`,
+      fill: 'none',
+      stroke: 'var(--color-ink)',
+      'stroke-width': 6,
+      'stroke-linecap': 'round',
+      'vector-effect': 'non-scaling-stroke',
+    }),
   )
 }
 
@@ -264,7 +337,30 @@ function sparkline(points) {
  * simply absent rather than showing a dash. Under seven readings the sparkline
  * goes too and its place says how many readings there are.
  */
-export function weightTile({ weights, settings, onPress }) {
+export const WEIGHT_VARIANTS = [SIZES.small, SIZES.medium, SIZES.large]
+
+/**
+ * Large is the whole tile; Medium drops the last three weigh-ins; Small is
+ * a half tile with the reading, the rate and Log.
+ *
+ * **Log sits on the reading's own line, at the right.** It is the tile's one
+ * action and it belongs with the number it changes; under the list it read
+ * as an afterthought and left a row of air around it. The sparkline takes the
+ * full width beneath, which also makes the line legible.
+ */
+export function weightTile({ weights, settings, onPress, edit = {} }) {
+  const variant = edit.variant || 'large'
+  const half = variant === 'small'
+  const tileOpts = {
+    id: 'weight',
+    title: 'Weight',
+    size: half ? 'half' : 'full',
+    onPress,
+    variants: WEIGHT_VARIANTS,
+    ...edit,
+    variant,
+  }
+
   const unit = settings.weightUnit
   const latest = weights[weights.length - 1] || null
   const points = windowPoints(computeTrend(weights, settings.trendWindow), SPARK_DAYS)
@@ -280,7 +376,7 @@ export function weightTile({ weights, settings, onPress }) {
 
   if (!latest) {
     return trendTile(
-      { id: 'weight', title: 'Weight', size: 'full', onPress },
+      tileOpts,
       h(
         'div',
         { class: 'flex items-center justify-between gap-[10px]' },
@@ -295,13 +391,25 @@ export function weightTile({ weights, settings, onPress }) {
       ? null
       : h('span', { class: 'delta-chip tnum' }, `${signed(kgToUnit(rate, unit))} ${unit} / week`)
 
+  const reading = h(
+    'div',
+    { class: 'flex min-w-0 flex-col gap-[6px]' },
+    h(
+      'div',
+      { class: 'flex items-baseline gap-[4px]' },
+      tnum(fmtWeight(latest.kg, unit), 'text-title font-semibold'),
+      h('span', { class: 'text-[14px] font-medium text-muted' }, unit),
+    ),
+    chip,
+  )
+
   const spark = enough
     ? sparkline(points)
     : h(
         'div',
-        { class: 'flex flex-col items-end text-right' },
+        { class: 'flex items-baseline gap-[6px]' },
         tnum(`${readings} of ${MIN_ENTRIES_FOR_TREND}`, 'text-[16px] font-semibold'),
-        caption('weigh-ins'),
+        caption('weigh-ins before the trend line'),
       )
 
   const row = (entry, i) =>
@@ -317,25 +425,19 @@ export function weightTile({ weights, settings, onPress }) {
       ),
     )
 
+  if (half) {
+    return trendTile(
+      tileOpts,
+      h('div', { class: 'flex flex-col gap-[10px]' }, reading, h('div', { class: 'flex' }, logButton)),
+    )
+  }
+
   return trendTile(
-    { id: 'weight', title: 'Weight', size: 'full', onPress },
-    h(
-      'div',
-      { class: 'flex items-center justify-between gap-[10px]' },
-      h(
-        'div',
-        { class: 'flex min-w-0 flex-col gap-[6px]' },
-        h(
-          'div',
-          { class: 'flex items-baseline gap-[4px]' },
-          tnum(fmtWeight(latest.kg, unit), 'text-title font-semibold'),
-          h('span', { class: 'text-[14px] font-medium text-muted' }, unit),
-        ),
-        chip,
-      ),
-      spark,
-    ),
-    h('div', { class: 'flex flex-col' }, ...weights.slice(-3).reverse().map(row)),
-    h('div', { class: 'flex justify-end' }, logButton),
+    tileOpts,
+    h('div', { class: 'flex items-start justify-between gap-[10px]' }, reading, logButton),
+    spark,
+    variant === 'large'
+      ? h('div', { class: 'flex flex-col' }, ...weights.slice(-3).reverse().map(row))
+      : null,
   )
 }
