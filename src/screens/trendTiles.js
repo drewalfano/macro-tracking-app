@@ -22,6 +22,29 @@ import { openTodayWeightDialog } from '../sheets/weighIn.js'
 
 const caption = (text) => h('span', { class: 'text-[12px] leading-snug text-muted' }, text)
 
+/**
+ * The `4 of 7` figure every average tile falls back to under the threshold.
+ *
+ * Cut by accident once, in the pass that trimmed the basis copy, and only
+ * a week with fewer than four full days reaches it, which is why every
+ * seeded check passed and the phone did not. The fallback is not copy; it
+ * is the tile's whole content on a thin week.
+ */
+function notEnough(week) {
+  const remaining = AVERAGES_MIN_DAYS - week.complete
+  return h(
+    'div',
+    { class: 'flex flex-col gap-[4px]' },
+    h(
+      'div',
+      { class: 'flex items-baseline gap-[6px]' },
+      tnum(`${week.complete} of ${week.of}`, 'text-title font-semibold'),
+      caption('full days logged'),
+    ),
+    caption(`Averages start at ${AVERAGES_MIN_DAYS} full days, with ${remaining} more to go.`),
+  )
+}
+
 /* -------------------------------------------------------------- calories */
 
 const CHART_W = 350
