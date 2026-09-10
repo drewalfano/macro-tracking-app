@@ -244,8 +244,8 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
     : rings
       ? h(
           'div',
-          // Same cap as Today's ring row: see `.day-rings` in styles.css.
-          { class: 'mx-auto flex w-full max-w-[350px] justify-between' },
+          // Four equal spaces, the same as Today's ring row.
+          { class: 'flex justify-evenly' },
           ...['protein', 'fat', 'carbs'].map((macro) =>
             macroRing({
               macro,

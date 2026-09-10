@@ -1780,33 +1780,19 @@
    * them.
    */
   .day-rings {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    justify-items: center;
-    margin-top: 20px;
     /**
-     * Capped at the row's width on a 390pt phone, and centred.
+     * Four equal spaces: edge, ring, ring, ring, edge.
      *
-     * 310, not the 350 the tiles get: the day card sits in a deck with its
-     * neighbours peeking in 10px each side, so its inset is 40 and the row
-     * is 310 wide there, measured. The three rings are a fixed 84px and the
-     * screen caps at 430pt, so on a Pro Max the 40px of extra card all went
-     * into the two gaps: 49px apart instead of 29, and the row read as
-     * pulled apart. Capping the
-     * row keeps every phone up to 390pt pixel-identical, and on a wider one
-     * the same row sits centred with the spare width as margin at each end.
-     * The cost, on that one width, is that the outer rings no longer land
-     * on the ends of the calorie bar.
+     * The rings used to sit on the card's edges with the spare width in the
+     * two gaps between them, which on a Pro Max put 49px between rings and
+     * nothing outside them, and the row read as pulled apart. Even spacing
+     * grows all four gaps together, so a wider card reads as more air
+     * around the group rather than a group stretched to fill it. A cap at
+     * the 390pt width was tried and read as a row that had stopped short.
      */
-    max-width: 310px;
-    width: 100%;
-    margin-inline: auto;
-  }
-  .day-rings > :first-child {
-    justify-self: start;
-  }
-  .day-rings > :last-child {
-    justify-self: end;
+    display: flex;
+    justify-content: space-evenly;
+    margin-top: 20px;
   }
 
   /**
