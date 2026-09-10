@@ -23,7 +23,7 @@ import {
   numberInput,
   labelledField,
 } from '../lib/ui.js'
-import { unitLabel, servingLabel, round, displayName } from '../lib/format.js'
+import { unitLabel, servingLabel, round, displayName, stripBrand } from '../lib/format.js'
 import { blockForTime, formatDayLabel, addDays, todayStr } from '../lib/dates.js'
 import { QUICK_ADD_SOURCE } from './quickAdd.js'
 // serving.js and custom.js import each other — `custom.js` pushes this file's
@@ -394,7 +394,7 @@ export function servingPanel({
         h(
           'div',
           { class: 'min-w-0' },
-          h('div', { class: 'text-[16px] font-semibold leading-tight' }, displayName(food.name)),
+          h('div', { class: 'text-[16px] font-semibold leading-tight' }, displayName(stripBrand(food.name, food.brand))),
           food.brand ? h('div', { class: 'text-[12px] text-muted' }, displayName(food.brand)) : null
         ),
 

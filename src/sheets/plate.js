@@ -21,7 +21,7 @@ import {
   textInput,
   notice,
 } from '../lib/ui.js'
-import { qty, servingLabel, unitLabel, pluralize, round, displayName } from '../lib/format.js'
+import { qty, servingLabel, unitLabel, pluralize, round, displayName, stripBrand } from '../lib/format.js'
 import { addDays, formatDayLabel, todayStr } from '../lib/dates.js'
 
 /**
@@ -126,7 +126,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
       function plateRow({ item, food, macros, state, index: i }) {
         // `foodRowBody` cases what it draws; the two aria labels below are
         // built here, so this is the cased copy they share.
-        const name = displayName(food?.name || item.name) || 'Deleted food'
+        const name = displayName(food ? stripBrand(food.name, food.brand) : item.name) || 'Deleted food'
         const sub = [amountLabel(item, food), STATE_LABEL[state]].filter(Boolean).join(' · ')
 
         const action =

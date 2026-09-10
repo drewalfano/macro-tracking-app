@@ -589,6 +589,15 @@ eq('no two rows start in the same place', new Set(shifts).size, shifts.length)
   eq('top sources sum by name with share', top.map((r) => [r.name, r.amount, r.times, Math.round(r.share * 100)]), [['A', 4000, 2, 100]])
 }
 
+/* -------------------------------------------------------------- stripBrand */
+eq('brand prefix comes off', F.stripBrand('MADEGOOD Chocolate Chip Granola Bar', 'Madegood'), 'Chocolate Chip Granola Bar')
+eq('multi-word brand', F.stripBrand('Nature Valley Sweet And Salty Nut', 'Nature Valley'), 'Sweet And Salty Nut')
+eq('separator after the brand goes too', F.stripBrand('Quaker - Instant Oats', 'Quaker'), 'Instant Oats')
+eq('a brand that only shares letters stays', F.stripBrand('Naturally Good Oats', 'Natural'), 'Naturally Good Oats')
+eq('brand in the middle stays', F.stripBrand('Oats by Quaker', 'Quaker'), 'Oats by Quaker')
+eq('never to nothing', F.stripBrand('Madegood', 'Madegood'), 'Madegood')
+eq('no brand, no change', F.stripBrand('Banana', null), 'Banana')
+
 // The summary stays last so every block above it is counted.
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -13,7 +13,7 @@ import {
   toggleFavourite,
 } from '../lib/db.js'
 import { card, emptyRow, textInput } from '../lib/ui.js'
-import { pluralize, displayName } from '../lib/format.js'
+import { pluralize, displayName, stripBrand } from '../lib/format.js'
 
 /**
  * Curating what is already in the library: the pinned order, and the saved
@@ -44,7 +44,7 @@ export function favouritesSheet() {
               h(
                 'div',
                 { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[14px] font-semibold' }, displayName(item.name)),
+                h('div', { class: 'truncate text-[14px] font-semibold' }, displayName(stripBrand(item.name, item.brand))),
                 h(
                   'div',
                   { class: 'text-[12px] text-muted' },

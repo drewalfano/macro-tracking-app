@@ -190,3 +190,41 @@ export function quantityLabel(entry, food) {
 export function pluralize(n, one, many = one + 's') {
   return `${n} ${n === 1 ? one : many}`
 }
+
+/**
+ * A product name with its brand taken off the front, for anywhere the brand
+ * is shown or known separately.
+ *
+ * Open Food Facts names very often lead with the brand: `MADEGOOD Chocolate
+ * Chip Granola Bar` with `brands: Madegood`. On a row that already carries
+ * the brand underneath, or a tile that has no room for it, the name says
+ * the brand twice or spends its first line on it. The record keeps the full
+ * string; this is a display rule, like `displayName`, and it runs before it.
+ *
+ * Only a brand that is genuinely the prefix comes off, compared without
+ * case or punctuation, followed by a separator or a space. `Nature Valley
+ * Sweet and Salty` loses `Nature Valley`; `Naturally Good Oats` keeps its
+ * name against a brand called `Natural`. And never to nothing: a product
+ * named exactly its brand stays as it is.
+ */
+export function stripBrand(name, brand) {
+  const s = String(name ?? '').trim()
+  const b = String(brand ?? '').trim()
+  if (!s || !b) return s
+  const norm = (x) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const nb = norm(b)
+  const ns = norm(s)
+  if (!nb || ns === nb || !ns.startsWith(nb + ' ')) return s
+  // Walk the original string past as many characters as the brand's
+  // normalised form covers, then past any separator that follows.
+  let i = 0
+  let seen = ''
+  while (i < s.length && seen.length < nb.length) {
+    const ch = s[i]
+    if (/[\p{L}\p{N}]/u.test(ch)) seen += ch.toLowerCase()
+    else if (seen && !seen.endsWith(' ')) seen += ' '
+    i++
+  }
+  const rest = s.slice(i).replace(/^[\s\-–—:,|·]+/u, '').trim()
+  return rest || s
+}

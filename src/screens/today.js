@@ -13,7 +13,7 @@ import { sumEntries, progress, computeMacros, MACRO_META } from '../lib/compute.
 import { macroRing } from '../lib/ring.js'
 import { tnum, card, emptyRow, macroTextColor, pageHeader, slot } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
-import { kcal, qty, servingLabel, unitLabel, displayName } from '../lib/format.js'
+import { kcal, qty, servingLabel, unitLabel, displayName, stripBrand } from '../lib/format.js'
 import { formatDayHeader, isToday, addDays, blockForTime } from '../lib/dates.js'
 import { entryRow } from '../lib/entryRow.js'
 import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
@@ -906,10 +906,10 @@ function quickAddTile(food, { date, block }) {
   // The tile cases its own visible name; these labels and the toast are strings
   // built here, so they case the name themselves or the spoken and written
   // versions of the same food drift apart.
-  const name = displayName(food.name)
+  const name = displayName(stripBrand(food.name, food.brand))
 
   return foodTile({
-    title: food.name,
+    title: stripBrand(food.name, food.brand),
     subtitle: serving,
     totals: computeMacros(food, quantity, unit),
     onBody: () => openServingSheet({ food, date, block }),

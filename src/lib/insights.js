@@ -1,5 +1,6 @@
 import { isPartialDay } from './compute.js'
 import { fromDateStr } from './dates.js'
+import { stripBrand } from './format.js'
 
 /**
  * The reads behind the Trends pages. Pure: `days` is newest first with
@@ -88,7 +89,7 @@ export function topSources(days, key, n = 5) {
     for (const e of day.entries || []) {
       const amount = e.computed?.[key] || 0
       if (!(amount > 0)) continue
-      const name = e.foodName || 'Deleted food'
+      const name = stripBrand(e.foodName, e.brand) || 'Deleted food'
       const row = byName.get(name) || { name, amount: 0, times: 0 }
       row.amount += amount
       row.times++

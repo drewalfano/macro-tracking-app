@@ -20,7 +20,7 @@ import { quickLogFood, logMeal, logPlate, defaultServing } from '../lib/logging.
 import { plateBar, pushPlate, resolvePlate, plateLoggedToast } from './plate.js'
 import { card, emptyRow, listRow, slot, foodRowBody } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
-import { servingLabel, qty, unitLabel, pluralize, displayName } from '../lib/format.js'
+import { servingLabel, qty, unitLabel, pluralize, displayName, stripBrand } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
 import { adoptDraft, isOnline, searchProducts } from '../lib/off.js'
 import { searchNewStaples, adoptStaple, stapleDraft, stapleName } from '../lib/staples.js'
@@ -334,7 +334,7 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
       const foodRow = (food) => {
         const { quantity, unit } = defaultServing(food)
         return pickRow({
-          title: food.name,
+          title: stripBrand(food.name, food.brand),
           subtitle:
             unit === 'serving'
               ? `${qty(quantity)} × ${servingLabel(food)}`
@@ -449,7 +449,7 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
             const { quantity, unit } = defaultServing(food)
             favNodes.push(
               favCard({
-                title: food.name,
+                title: stripBrand(food.name, food.brand),
                 subtitle:
                   unit === 'serving'
                     ? `${qty(quantity)} × ${servingLabel(food)}`

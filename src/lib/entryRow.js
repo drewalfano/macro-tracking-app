@@ -3,6 +3,7 @@ import { icon } from './icons.js'
 import { estimateBadge, foodRowBody } from './ui.js'
 import { DESCRIBE_SOURCE } from './logging.js'
 import { entryWhen } from './dates.js'
+import { stripBrand } from './format.js'
 
 /**
  * One logged entry.
@@ -102,7 +103,7 @@ export function entryRow(
     // explaining there — and this list is read by scanning names, where a
     // repeated word on some rows and not others is noise the glyph is not.
     foodRowBody({
-      name: entry.foodName || 'Deleted food',
+      name: stripBrand(entry.foodName, entry.brand) || 'Deleted food',
       // The clock, or the block when the clock disagrees with it. See `entryWhen`.
       detail: entryWhen(entry, settings),
       totals: entry.computed,
