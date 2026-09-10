@@ -368,9 +368,14 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
   const readings = points.filter((p) => p.kg != null).length
   const enough = weights.length >= MIN_ENTRIES_FOR_TREND
 
+  /**
+   * The app's small chip, the one Today uses for Full log. A filled pill on
+   * this line outweighed the reading beside it; the tile's action is a way
+   * in, not the point of the tile.
+   */
   const logButton = h(
     'button',
-    { class: 'btn-primary btn-compact', type: 'button', onclick: () => openTodayWeightSheet() },
+    { class: 'chip-sm', type: 'button', onclick: () => openTodayWeightSheet() },
     'Log',
   )
 
@@ -434,7 +439,7 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
 
   return trendTile(
     tileOpts,
-    h('div', { class: 'flex items-start justify-between gap-[10px]' }, reading, logButton),
+    h('div', { class: 'flex items-center justify-between gap-[10px]' }, reading, logButton),
     spark,
     variant === 'large'
       ? h('div', { class: 'flex flex-col' }, ...weights.slice(-3).reverse().map(row))

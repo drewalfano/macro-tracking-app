@@ -381,7 +381,8 @@ export function trendsScreen() {
       }
 
       /**
-       * One button at the foot, Edit tiles or Done in the same place. Nothing
+       * One chip under the grid at the right, where Today keeps Full log, and
+       * it reads Edit tiles or Done in the same place. Nothing
        * is saved until Done: the order and the variants live in `draft` while
        * editing, so a drag settles on screen rather than being rebuilt from
        * the store the instant it lands, and Done writes the arrangement once.
@@ -389,7 +390,7 @@ export function trendsScreen() {
       const editBtn = h(
         'button',
         {
-          class: 'edit-btn',
+          class: 'chip-sm self-end',
           type: 'button',
           onclick: async () => {
             if (editing) {
