@@ -75,6 +75,7 @@ export function trendTile(
   {
     id,
     title,
+    subtitle = null,
     size = 'full',
     onPress = null,
     editing = false,
@@ -84,7 +85,17 @@ export function trendTile(
   },
   ...children
 ) {
-  const label = h('span', { class: 'text-[16px] font-semibold leading-tight text-ink' }, title)
+  /**
+   * The subtitle sits tight under the title, the way a Fitness tile says
+   * "Today" under "Activity": one short phrase that names what the number
+   * is, in the header rather than as a line of copy in the body.
+   */
+  const label = h(
+    'span',
+    { class: 'flex min-w-0 flex-col gap-[2px]' },
+    h('span', { class: 'text-[16px] font-semibold leading-tight text-ink' }, title),
+    subtitle ? h('span', { class: 'text-[12px] leading-tight text-muted' }, subtitle) : null,
+  )
 
   /**
    * In edit mode the chevron gives way to a grip and the header stops being
