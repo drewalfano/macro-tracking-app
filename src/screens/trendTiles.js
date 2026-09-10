@@ -244,8 +244,9 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
     : rings
       ? h(
           'div',
-          // Four equal spaces from the tile's edge, the same as Today's row.
-          { class: '-mx-[20px] flex justify-evenly' },
+          // Even spaces from the tile's edge, never inside its padding: the
+          // same arithmetic as `.day-rings` in styles.css.
+          { class: 'flex justify-between', style: { paddingInline: 'max(0px, calc((100% - 292px) / 4))' } },
           ...['protein', 'fat', 'carbs'].map((macro) =>
             macroRing({
               macro,

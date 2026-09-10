@@ -1791,12 +1791,23 @@
      * the 390pt width was tried and read as a row that had stopped short.
      */
     display: flex;
-    justify-content: space-evenly;
+    justify-content: space-between;
     margin-top: 20px;
-    /* Measured from the card's edge, not the padding's: the row bleeds the
-       card's 20px inset so edge-to-ring is the same space as ring-to-ring.
-       Inside the padding the outer spaces were 20px larger than the inner. */
-    margin-inline: -20px;
+    /**
+     * The outer space is the even share of the card's width, measured from
+     * the card's edge, but never less than the 20px padding.
+     *
+     * The even share from the card's edge is (card - 252) / 4; this row
+     * sits inside the padding, so its own inset is that less 20, and in
+     * terms of the row's width (card less 40) that is (100% - 292px) / 4.
+     * Clamped at zero: on a phone narrow enough that the share drops under
+     * 20px the rings stop at the padding's edge and only the two inner
+     * gaps shrink, instead of the outer rings walking into the inset.
+     * 35px a side on a 430pt phone, 25 on a 390. The iPhone 13, at 390pt,
+     * is the smallest phone this is judged against, so on every supported
+     * width the share clears the padding and the floor is a backstop.
+     */
+    padding-inline: max(0px, calc((100% - 292px) / 4));
   }
 
   /**
