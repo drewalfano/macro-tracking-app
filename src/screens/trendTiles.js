@@ -223,7 +223,7 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
         { class: 'w-[14px] text-[12px] font-semibold', style: { color: macroTextColor(macro) } },
         MACRO_META[macro].letter,
       ),
-      tnum(g(week[macro]), 'text-[20px] font-semibold'),
+      tnum(g(week[macro]), 'text-[18px] font-semibold leading-tight'),
       h('span', { class: 'text-[12px] font-semibold', style: { color: macroTextColor(macro) } }, 'g'),
     )
 
@@ -244,7 +244,7 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
         )
       : h(
           'div',
-          { class: 'flex flex-col gap-[4px]' },
+          { class: 'flex flex-col gap-[2px]' },
           ...['protein', 'fat', 'carbs'].map(line),
           caption(`average, ${week.complete} full days`),
         )
@@ -430,10 +430,17 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
       ),
     )
 
+  // Small is a square: the reading and Log, and no rate chip. The chip
+  // would put the tile over its own height, and the rate is one tap away.
   if (half) {
     return trendTile(
       tileOpts,
-      h('div', { class: 'flex flex-col gap-[10px]' }, reading, h('div', { class: 'flex' }, logButton)),
+      h(
+        'div',
+        { class: 'flex flex-col gap-[10px]' },
+        reading.firstChild,
+        h('div', { class: 'flex' }, logButton),
+      ),
     )
   }
 

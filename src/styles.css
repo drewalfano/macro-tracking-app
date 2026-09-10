@@ -1348,6 +1348,15 @@
   .trends-grid > [data-size='full'] {
     grid-column: span 2;
   }
+  /**
+   * A half tile is a square. One size, so a row of two is always level and
+   * a Small tile is the same object wherever it lands. `aspect-ratio` is a
+   * preferred height, not a cap: in edit mode the size picker adds a row and
+   * the tile grows to hold it rather than clipping.
+   */
+  .trends-grid > [data-size='half'] {
+    aspect-ratio: 1 / 1;
+  }
 
   /**
    * The calorie bars' type. Values carry a halo in the tile's own surface so
