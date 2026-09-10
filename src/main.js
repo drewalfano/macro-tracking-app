@@ -77,7 +77,24 @@ let enteringTimer = null
 async function show(factory) {
   const token = ++showToken
   const next = factory()
-  await next.ready
+  /**
+   * A screen that throws while building must say so.
+   *
+   * It did not: the rejection went nowhere, the tab bar had already lit the
+   * new tab, and the previous screen stayed up under it. Seen on a phone as
+   * "Trends shows Today" with nothing in any log to say why. The toast
+   * carries the message because on the device this runs on there is no
+   * console to read, and the same line goes to the console for when there
+   * is one.
+   */
+  try {
+    await next.ready
+  } catch (err) {
+    console.error('Screen failed to build', err)
+    toast(`Couldn’t open this screen: ${err?.message || err}`)
+    next.destroy()
+    return
+  }
   // A faster tap already started another navigation; this one is stale.
   if (token !== showToken) {
     next.destroy()
