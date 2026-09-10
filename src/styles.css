@@ -1793,6 +1793,10 @@
     display: flex;
     justify-content: space-evenly;
     margin-top: 20px;
+    /* Measured from the card's edge, not the padding's: the row bleeds the
+       card's 20px inset so edge-to-ring is the same space as ring-to-ring.
+       Inside the padding the outer spaces were 20px larger than the inner. */
+    margin-inline: -20px;
   }
 
   /**

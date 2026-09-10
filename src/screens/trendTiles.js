@@ -244,8 +244,8 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
     : rings
       ? h(
           'div',
-          // Four equal spaces, the same as Today's ring row.
-          { class: 'flex justify-evenly' },
+          // Four equal spaces from the tile's edge, the same as Today's row.
+          { class: '-mx-[20px] flex justify-evenly' },
           ...['protein', 'fat', 'carbs'].map((macro) =>
             macroRing({
               macro,
