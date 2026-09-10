@@ -244,7 +244,8 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
     : rings
       ? h(
           'div',
-          { class: 'flex justify-between' },
+          // Same cap as Today's ring row: see `.day-rings` in styles.css.
+          { class: 'mx-auto flex w-full max-w-[350px] justify-between' },
           ...['protein', 'fat', 'carbs'].map((macro) =>
             macroRing({
               macro,
