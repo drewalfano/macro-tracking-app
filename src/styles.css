@@ -1487,6 +1487,10 @@
     overflow: visible;
   }
   .reorder-row {
+    /* Positioned so the lifted row's z-index counts. `.card > * + *` gives
+       every row but the first a position; the first had none, and lifted
+       it painted under the rows it crossed, its text over theirs. */
+    position: relative;
     transition:
       scale var(--dur-fast) var(--ease-out),
       box-shadow var(--dur-fast) var(--ease-out);
@@ -1498,6 +1502,19 @@
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
     scale: 1.02;
     transition: none;
+  }
+  /* In a row the grip stands where the unpin circle stood. That circle is
+     38px flush to the row's inset; the grip is 44px, so 3px of it hangs
+     past the inset on each side and the two centres land on one line. The
+     tile's -19px is for a header with no button to line up with. */
+  .row .grip {
+    margin: -12px -3px;
+  }
+  /* The divider is drawn above each row by `.card > * + *::before`, so a
+     lifted row carried its rule with it. Off while lifted; the rows sliding
+     beneath keep theirs. */
+  .card > .reorder-row.is-dragging::before {
+    display: none;
   }
   .card[data-editing] .reorder-row {
     user-select: none;
