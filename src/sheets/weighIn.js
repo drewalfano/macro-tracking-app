@@ -261,7 +261,7 @@ export async function openWeighInSheet({ day = null } = {}) {
  * `onSaved` is what differs: the page has nothing to do after a save because
  * it is watching the store, the sheet closes.
  */
-export function todayWeightCard({ unit, today, todayEntry, onSaved = null }) {
+export function todayWeightCard({ unit, today, todayEntry, onSaved = null, bare = false }) {
   let draft = todayEntry ? String(kgToUnit(todayEntry.kg, unit).toFixed(1)) : ''
   const saveBtn = h(
     'button',
@@ -290,11 +290,16 @@ export function todayWeightCard({ unit, today, todayEntry, onSaved = null }) {
     },
   })
 
-  return card(
+  /**
+   * `bare` is the dialog's form: the same field, button and hint with no
+   * card around them. The dialog box is already a surface with its own
+   * inset, and a white card inside a grey box was a container holding a
+   * container.
+   */
+  const body = (cls) =>
     h(
       'div',
-      // The plain 20 all round, which is what a card's inset is.
-      { class: 'flex flex-col gap-[10px] px-[20px] py-[20px]' },
+      { class: cls },
       h(
         'div',
         { class: 'flex items-center gap-[10px]' },
@@ -311,8 +316,9 @@ export function todayWeightCard({ unit, today, todayEntry, onSaved = null }) {
         { class: 'text-[12px] text-muted' },
         'Saving again replaces today’s value rather than adding a second one.',
       ),
-    ),
-  )
+    )
+  // The plain 20 all round, which is what a card's inset is.
+  return bare ? body('flex flex-col gap-[10px]') : card(body('flex flex-col gap-[10px] px-[20px] py-[20px]'))
 }
 
 /**
@@ -327,6 +333,6 @@ export async function openTodayWeightDialog() {
   const unit = settings.weightUnit
   return openDialog({
     title: 'Today’s weight',
-    render: (close) => todayWeightCard({ unit, today, todayEntry, onSaved: close }),
+    render: (close) => todayWeightCard({ unit, today, todayEntry, onSaved: close, bare: true }),
   })
 }
