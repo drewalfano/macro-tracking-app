@@ -225,7 +225,7 @@ function emptyBlock({ name, block, date, host }) {
  */
 const SAVE_AS_MEAL_MIN = 2
 
-function populatedBlock({ name, entries, host }) {
+function populatedBlock({ name, entries, host, settings }) {
   return h(
     'section',
     { class: 'flex flex-col gap-[10px]' },
@@ -247,6 +247,7 @@ function populatedBlock({ name, entries, host }) {
     card(
       entries.map((entry) =>
         entryRow(entry, {
+          settings,
           onEdit: (e) => openEditEntry(e, host),
           onDelete: deleteEntryWithUndo,
           onDuplicate: (e) => openDuplicateSheet(e, host),
@@ -314,7 +315,7 @@ export async function openLogSheet() {
           const blockEntries = entries.filter((e) => e.block === block)
           const name = settings.blockNames[i]
           return blockEntries.length
-            ? populatedBlock({ name, entries: blockEntries, host: ctx })
+            ? populatedBlock({ name, entries: blockEntries, host: ctx, settings })
             : emptyBlock({ name, block, date: state.date, host: ctx })
         })
 

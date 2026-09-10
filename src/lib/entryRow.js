@@ -2,7 +2,7 @@ import { h, swipeToReveal, longPress } from './dom.js'
 import { icon } from './icons.js'
 import { estimateBadge, foodRowBody } from './ui.js'
 import { DESCRIBE_SOURCE } from './logging.js'
-import { formatTime } from './dates.js'
+import { entryWhen } from './dates.js'
 
 /**
  * One logged entry.
@@ -28,7 +28,10 @@ import { formatTime } from './dates.js'
  */
 const REMOVE_MS = 180
 
-export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap, isNew = false } = {}) {
+export function entryRow(
+  entry,
+  { onEdit, onDelete, onDuplicate, onTap, isNew = false, settings = null } = {},
+) {
   /**
    * `collapse` is for the one action that removes this row from the list.
    *
@@ -100,7 +103,8 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap, isNew = 
     // repeated word on some rows and not others is noise the glyph is not.
     foodRowBody({
       name: entry.foodName || 'Deleted food',
-      detail: formatTime(entry.createdAt),
+      // The clock, or the block when the clock disagrees with it. See `entryWhen`.
+      detail: entryWhen(entry, settings),
       totals: entry.computed,
       badge: entry.source === DESCRIBE_SOURCE ? estimateBadge() : null,
     })

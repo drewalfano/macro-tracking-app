@@ -1419,6 +1419,7 @@ export function todayScreen() {
                     .slice(0, LOG_PREVIEW_MAX)
                     .map((entry) =>
                       entryRow(entry, {
+                        settings,
                         onEdit: openEditEntry,
                         onDelete: deleteEntryWithUndo,
                         onDuplicate: openDuplicateSheet,

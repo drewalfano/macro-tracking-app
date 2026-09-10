@@ -170,3 +170,40 @@ export function blockForTime(date = new Date(), thresholds = { afternoon: 12, ni
   if (hour < thresholds.night) return 'afternoon'
   return 'night'
 }
+
+/**
+ * A day's entries in the order the day happened: by block, then by the
+ * clock within the block.
+ *
+ * It was the clock alone, which put a breakfast logged at 3pm under dinner:
+ * `createdAt` is when Log was tapped, and the block is when it was eaten,
+ * and the block is the one the person chose. A row with no block sorts
+ * last, after the three that have one.
+ */
+export function byBlockThenTime(a, b) {
+  const ai = BLOCKS.indexOf(a.block)
+  const bi = BLOCKS.indexOf(b.block)
+  const ao = ai < 0 ? BLOCKS.length : ai
+  const bo = bi < 0 ? BLOCKS.length : bi
+  if (ao !== bo) return ao - bo
+  return (a.createdAt || 0) - (b.createdAt || 0)
+}
+
+/**
+ * What a logged row says about when: the clock if it agrees with the block,
+ * the block's name if it does not.
+ *
+ * The clock is the moment Log was tapped. It reads as "when I ate this"
+ * only while it lands in the block the row was filed under; log the
+ * morning's oats at 3pm and `3:03 PM` under a Morning entry asserts a time
+ * nobody meant. So the row falls back to the word that was chosen. Same
+ * for a day logged ahead. A time field was considered and turned down:
+ * nothing in the app computes on the minute.
+ */
+export function entryWhen(entry, settings) {
+  const i = BLOCKS.indexOf(entry.block)
+  if (i < 0 || !entry.createdAt) return formatTime(entry.createdAt)
+  const stamped = blockForTime(new Date(entry.createdAt), settings?.blockThresholds)
+  if (stamped === entry.block) return formatTime(entry.createdAt)
+  return settings?.blockNames?.[i] ?? entry.block
+}

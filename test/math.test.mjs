@@ -535,8 +535,6 @@ eq('one shift per bubble row', shifts.length, bubbleRows.length)
 eq('every row starts off the left edge', shifts.every((x) => x < 0), true)
 eq('no two rows start in the same place', new Set(shifts).size, shifts.length)
 
-console.log(`\n${pass} passed, ${fail} failed`)
-process.exit(fail ? 1 : 0)
 
 /* ----------------------------------------------------------------- streak */
 {
@@ -553,3 +551,22 @@ process.exit(fail ? 1 : 0)
   eq('consistency ignores days past the window', S.consistency(Array.from({ length: 40 }, on), T).pct, 100)
   eq('partial days do not count toward consistency', S.consistency([on(), part(), off()], T, 3), { logged: 1, of: 3, pct: 33 })
 }
+
+/* ------------------------------------------------------- entry ordering */
+{
+  const e = (block, createdAt) => ({ block, createdAt })
+  const order = (list) => [...list].sort(D.byBlockThenTime).map((x) => x.block + '@' + x.createdAt)
+  eq('block first, clock second', order([e('night', 1), e('morning', 9), e('morning', 3), e('afternoon', 2)]), ['morning@3', 'morning@9', 'afternoon@2', 'night@1'])
+  eq('a late-logged breakfast sorts into the morning', order([e('afternoon', 100), e('morning', 200)]), ['morning@200', 'afternoon@100'])
+  eq('no block sorts last', order([e(undefined, 1), e('night', 2)]), ['night@2', 'undefined@1'])
+  const S = { blockThresholds: { afternoon: 12, night: 17 }, blockNames: ['Morning', 'Afternoon', 'Evening'] }
+  const at = (h) => { const d = new Date(); d.setHours(h, 5, 0, 0); return d.getTime() }
+  eq('clock shown when it agrees with the block', D.entryWhen(e('morning', at(8)), S), D.formatTime(at(8)))
+  eq('block name shown when the clock disagrees', D.entryWhen(e('morning', at(15)), S), 'Morning')
+  eq('block name is the custom one', D.entryWhen(e('night', at(9)), S), 'Evening')
+  eq('no block falls back to the clock', D.entryWhen(e(undefined, at(9)), S), D.formatTime(at(9)))
+}
+
+// The summary stays last so every block above it is counted.
+console.log(`\n${pass} passed, ${fail} failed`)
+process.exit(fail ? 1 : 0)

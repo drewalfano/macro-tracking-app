@@ -4,7 +4,7 @@
  */
 
 import { openDB } from 'idb'
-import { addDays, todayStr } from './dates.js'
+import { addDays, todayStr, byBlockThenTime } from './dates.js'
 import { weightUnitFor } from './format.js'
 import {
   EXPORT_FORMAT,
@@ -209,8 +209,8 @@ function tracked(promise) {
   return promise
 }
 
-/** Entries are shown and summed in the order they were logged. */
-const byCreatedAt = (a, b) => a.createdAt - b.createdAt
+/** Entries are shown and summed in the order the day happened. See `byBlockThenTime`. */
+const byCreatedAt = byBlockThenTime
 
 /**
  * Fold one written row into the cached day, in place, keeping the order.

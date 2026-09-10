@@ -3267,18 +3267,21 @@
 
   /* Opaque canvas for the first 34% — the 54px the home indicator and the
      bottom of the pill live in, where there is nothing to be gained by letting
-     a log row show through. Then a long ramp over the remaining 105px, which is
-     what keeps the band from ending on a visible line. One colour throughout,
-     so there is no second hue to go muddy. */
+     a log row show through. Then a ramp that is DONE by 70% of the band, about
+     111px up, rather than running to the top edge. The colour ran the full
+     159px once and read as a wash reaching a third of the way up a phone
+     screen; the blur, which is what softens the edge, keeps the whole band
+     and the tint stops well inside it. One colour throughout, so there is no
+     second hue to go muddy. */
   .tabbar-fade > .fade-veil {
     background: linear-gradient(
       to top,
       var(--color-canvas) 0%,
       var(--color-canvas) 34%,
-      color-mix(in srgb, var(--color-canvas) 86%, transparent) 48%,
-      color-mix(in srgb, var(--color-canvas) 54%, transparent) 66%,
-      color-mix(in srgb, var(--color-canvas) 22%, transparent) 82%,
-      transparent 100%
+      color-mix(in srgb, var(--color-canvas) 80%, transparent) 44%,
+      color-mix(in srgb, var(--color-canvas) 40%, transparent) 56%,
+      color-mix(in srgb, var(--color-canvas) 12%, transparent) 65%,
+      transparent 70%
     );
   }
 
