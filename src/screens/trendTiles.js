@@ -282,14 +282,39 @@ function sparkline(points) {
   const min = Math.min(...ys)
   const max = Math.max(...ys)
   const span = max - min || 1
+  const at = (i, v) => [
+    SPARK_PAD + (i / (points.length - 1)) * (SPARK_W - 2 * SPARK_PAD),
+    SPARK_PAD + (1 - (v - min) / span) * (SPARK_H - 2 * SPARK_PAD),
+  ]
   const coords = points
-    .map((p, i) => (p.trend == null ? null : [i, p.trend]))
+    .map((p, i) => (p.trend == null ? null : at(i, p.trend)))
     .filter(Boolean)
-    .map(([i, v]) => [
-      SPARK_PAD + (i / (points.length - 1)) * (SPARK_W - 2 * SPARK_PAD),
-      SPARK_PAD + (1 - (v - min) / span) * (SPARK_H - 2 * SPARK_PAD),
-    ])
   const last = coords[coords.length - 1]
+  /**
+   * Each weigh-in is a dot on the line, in muted, the way the weight page
+   * draws its raw readings under the trend; a bare line said nothing about
+   * how many readings it stood on or when they were. The dot is placed on
+   * the TREND at that day rather than at the raw value, because the raw
+   * values are outside the line's axis range on a noisy week and a dot off
+   * the line at this size reads as a fault, not as data.
+   *
+   * Zero-length strokes with round caps rather than circles: the box is
+   * stretched to the tile and a circle would stretch with it.
+   */
+  const bead = (x, y, width, colour) =>
+    s('polyline', {
+      points: `${x.toFixed(1)},${y.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)}`,
+      fill: 'none',
+      stroke: colour,
+      'stroke-width': width,
+      'stroke-linecap': 'round',
+      'vector-effect': 'non-scaling-stroke',
+    })
+  const dots = points
+    .map((p, i) => (p.kg != null && p.trend != null ? at(i, p.trend) : null))
+    .filter(Boolean)
+    .slice(0, -1)
+    .map(([x, y]) => bead(x, y, 5, 'var(--color-muted)'))
   return s(
     'svg',
     /**
@@ -313,16 +338,9 @@ function sparkline(points) {
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
     }),
-    // The end bead would stretch with the box, so it is a stroke of zero
-    // length with a round cap: the cap does not scale.
-    s('polyline', {
-      points: `${last[0].toFixed(1)},${last[1].toFixed(1)} ${last[0].toFixed(1)},${last[1].toFixed(1)}`,
-      fill: 'none',
-      stroke: 'var(--color-ink)',
-      'stroke-width': 6,
-      'stroke-linecap': 'round',
-      'vector-effect': 'non-scaling-stroke',
-    }),
+    ...dots,
+    // The latest reading, in ink and larger: the point the number above is.
+    bead(last[0], last[1], 7, 'var(--color-ink)'),
   )
 }
 
@@ -433,14 +451,12 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
   // Small is a square: the reading and Log, and no rate chip. The chip
   // would put the tile over its own height, and the rate is one tap away.
   if (half) {
+    // Log spans the tile's inner width: a chip hugging its own word in a
+    // square reads as a leftover, and the row it is on has nothing else.
+    logButton.classList.add('w-full', 'justify-center')
     return trendTile(
       tileOpts,
-      h(
-        'div',
-        { class: 'flex flex-col gap-[10px]' },
-        reading.firstChild,
-        h('div', { class: 'flex' }, logButton),
-      ),
+      h('div', { class: 'flex flex-col gap-[10px]' }, reading.firstChild, logButton),
     )
   }
 

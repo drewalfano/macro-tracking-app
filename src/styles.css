@@ -1357,6 +1357,16 @@
   .trends-grid > [data-size='half'] {
     aspect-ratio: 1 / 1;
   }
+  /**
+   * In a square the figure sits at the foot, title at the top, the way a
+   * small widget lays out. Top-aligned it left the bottom third of the tile
+   * empty, and a number floating under its title with air beneath reads as
+   * a box that has not filled yet. The last child takes the slack, which in
+   * edit mode leaves the size picker up with the title.
+   */
+  .trends-grid > [data-size='half'] > :last-child {
+    margin-top: auto;
+  }
 
   /**
    * The calorie bars' type. Values carry a halo in the tile's own surface so
