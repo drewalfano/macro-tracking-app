@@ -1,6 +1,6 @@
 import { h, repaint } from '../lib/dom.js'
 import { openSheet } from '../lib/sheet.js'
-import { toast } from '../lib/toast.js'
+import { toast, openDialog } from '../lib/toast.js'
 import {
   getWeight,
   putWeight,
@@ -316,16 +316,17 @@ export function todayWeightCard({ unit, today, todayEntry, onSaved = null }) {
 }
 
 /**
- * The Log button's sheet: today's card and nothing else. Not the list, not
- * the day editor. A tap that said Log gets a field to type in and a button
- * to press, and the sheet leaves on the save.
+ * The Log button's dialog: today's card and nothing else, floating over
+ * the dimmed page. Not the list, not the day editor, not a sheet. A tap
+ * that said Log gets a field to type in and a button to press, and the
+ * card leaves on the save.
  */
-export async function openTodayWeightSheet() {
+export async function openTodayWeightDialog() {
   const today = todayStr()
   const [settings, todayEntry] = await Promise.all([getSettings(), getWeight(today)])
   const unit = settings.weightUnit
-  return openSheet({
+  return openDialog({
     title: 'Today’s weight',
-    render: (ctx) => todayWeightCard({ unit, today, todayEntry, onSaved: () => ctx.close() }),
+    render: (close) => todayWeightCard({ unit, today, todayEntry, onSaved: close }),
   })
 }

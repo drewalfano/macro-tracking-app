@@ -417,3 +417,74 @@ export function confirm(
     requestAnimationFrame(() => input?.focus())
   })
 }
+
+/**
+ * A floating card over the dimmed page, for a task with one field in it.
+ *
+ * The confirm dialog's surface, opened up: same scrim, same dim, same box on
+ * the same entrance, holding whatever `render` returns. A sheet is the
+ * app's surface for a task with a body — a list, a picker, a set of fields.
+ * Logging today's weight is one number and one button, and a sheet rising
+ * from the foot of the screen for that was a whole surface arriving for a
+ * question that fits in a card.
+ *
+ * **The box sits high, not centred.** On the phone this runs on the number
+ * keyboard takes the lower half of the screen the moment the field takes
+ * focus, and a box centred in the layout viewport lands under it. Anchored
+ * at the top it stays in view with the keyboard up. UNVERIFIED ON DEVICE.
+ *
+ * `render(close)` gets the function that dismisses the dialog, so a save
+ * can close it. Backdrop and Escape close it too.
+ */
+export function openDialog({ title, render }) {
+  const close = () => {
+    if (scrim.dataset.closing) return
+    scrim.dataset.closing = 'true'
+    setTimeout(() => scrim.remove(), 200)
+    document.removeEventListener('keydown', onKey)
+  }
+  const onKey = (e) => {
+    if (e.key === 'Escape') close()
+  }
+
+  const dim = h('div', { class: 'sheet-dim confirm-dim', 'aria-hidden': 'true' })
+  const box = h(
+    'div',
+    {
+      class:
+        'confirm-in relative w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-label': title,
+    },
+    h(
+      'div',
+      { class: 'mb-[20px] flex items-center justify-between gap-[10px]' },
+      h('h2', { class: 'text-[20px] font-semibold' }, title),
+      h(
+        'button',
+        { class: 'icon-btn -my-[7px] -mr-[7px]', 'aria-label': 'Close', onclick: close },
+        icon('close', { size: 20, stroke: 2 }),
+      ),
+    ),
+    render(close),
+  )
+  const scrim = h(
+    'div',
+    {
+      class:
+        'sheet-scrim screen-cover z-[90] flex items-start justify-center px-[20px] pt-[calc(env(safe-area-inset-top,0px)+96px)]',
+      onclick: (e) => {
+        if (!box.contains(e.target)) close()
+      },
+    },
+    dim,
+    box,
+  )
+  document.body.appendChild(scrim)
+  document.addEventListener('keydown', onKey)
+  // The field is the point of the dialog, so it takes focus on arrival and
+  // the keyboard comes with it.
+  requestAnimationFrame(() => box.querySelector('input')?.focus())
+  return { close }
+}

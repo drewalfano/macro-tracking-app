@@ -7,7 +7,7 @@ import { kcal as fmtKcal, g } from '../lib/format.js'
 import { formatDayShort, formatDayAge, fromDateStr } from '../lib/dates.js'
 import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
-import { openTodayWeightSheet } from '../sheets/weighIn.js'
+import { openTodayWeightDialog } from '../sheets/weighIn.js'
 
 /**
  * The tiles on the Trends grid. Each is a function of the data the screen
@@ -21,6 +21,16 @@ import { openTodayWeightSheet } from '../sheets/weighIn.js'
  */
 
 const caption = (text) => h('span', { class: 'text-[12px] leading-snug text-muted' }, text)
+
+/**
+ * What an average is drawn from, in one phrase used by every tile that
+ * shows one: the window, then the days that counted, then the days that
+ * did not. A number with no basis under it could be today's or the year's,
+ * and on a screen called Trends that is the first question.
+ */
+const basisOf = (week) =>
+  `7-day average · ${week.complete} full days` +
+  (week.partial > 0 ? ` · ${week.partial} partial left out` : '')
 
 /** The `4 of 7` figure every tile falls back to under the threshold. */
 function notEnough(week) {
@@ -138,7 +148,9 @@ export function caloriesTile({ days, week, targets, onPress, edit = {} }) {
   const chart = variant === 'large'
   const recent = days.slice(0, 7).reverse()
   const range = `${formatDayShort(recent[0].date)} to ${formatDayShort(recent[recent.length - 1].date)}`
-  const basis = week.partial > 0 ? `${range} · ${week.partial} partial left out` : range
+  const basis =
+    `${range} · ${week.complete} full days` +
+    (week.partial > 0 ? ` · ${week.partial} partial left out` : '')
 
   const headline = week.enough
     ? h(
@@ -155,7 +167,7 @@ export function caloriesTile({ days, week, targets, onPress, edit = {} }) {
           ),
           chart ? caption('average') : null,
         ),
-        caption(chart ? basis : `average, ${week.complete} full days`),
+        caption(chart ? basis : '7-day average'),
       )
     : notEnough(week)
 
@@ -188,14 +200,14 @@ function bigNumber(value, label) {
 export function streakTile(n, edit = {}) {
   return trendTile(
     { id: 'streak', title: 'Streak', size: 'half', ...edit },
-    bigNumber(String(n), n === 1 ? 'full day in a row' : 'full days in a row'),
+    bigNumber(String(n), n === 1 ? 'day fully logged in a row' : 'days fully logged in a row'),
   )
 }
 
 export function consistencyTile({ pct, logged, of }, edit = {}) {
   return trendTile(
     { id: 'consistency', title: 'Consistency', size: 'half', ...edit },
-    bigNumber(`${pct}%`, `${logged} of ${of} days full`),
+    bigNumber(`${pct}%`, `${logged} of ${of} days fully logged`),
   )
 }
 
@@ -246,7 +258,7 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
           'div',
           { class: 'flex flex-col gap-[2px]' },
           ...['protein', 'fat', 'carbs'].map(line),
-          caption(`average, ${week.complete} full days`),
+          caption('7-day average'),
         )
 
   return trendTile(
@@ -259,6 +271,9 @@ export function macrosTile({ week, targets, onPress, edit = {} }) {
       ...edit,
       variant,
     },
+    // The rings read `183 / 180g` and nothing on the tile said of what. The
+    // basis line goes above them, where Calories puts its own.
+    rings && week.enough ? caption(basisOf(week)) : null,
     body,
   )
 }
@@ -393,7 +408,7 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
    */
   const logButton = h(
     'button',
-    { class: 'chip-sm', type: 'button', onclick: () => openTodayWeightSheet() },
+    { class: 'chip-sm', type: 'button', onclick: () => openTodayWeightDialog() },
     'Log',
   )
 
