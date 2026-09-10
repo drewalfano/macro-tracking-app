@@ -163,10 +163,20 @@ function dayPanel({ day: initialDay, unit }) {
   }
 }
 
-export async function openWeighInSheet() {
+/**
+ * `day` opens straight onto that day's editor, with no list underneath it.
+ *
+ * The Weight tile's Log button is a promise of one step, and the list is a
+ * step: a person who tapped Log already knows which day they mean. The editor
+ * is the same panel the list pushes, so what saves and how it says so is
+ * unchanged; `pop` on a lone panel is `history.back()`, which closes the sheet.
+ */
+export async function openWeighInSheet({ day = null } = {}) {
   const [settings, initial] = await Promise.all([getSettings(), listWeights()])
   const unit = settings.weightUnit
   let weights = initial
+
+  if (day) return openSheet(dayPanel({ day, unit }))
 
   return openSheet({
     title: 'Weigh-ins',

@@ -4,7 +4,10 @@ import { tnum, macroColor, macroTextColor } from '../lib/ui.js'
 import { macroRing } from '../lib/ring.js'
 import { AVERAGES_MIN_DAYS, isPartialDay } from '../lib/compute.js'
 import { kcal as fmtKcal } from '../lib/format.js'
-import { formatDayShort, fromDateStr } from '../lib/dates.js'
+import { formatDayShort, formatDayAge, fromDateStr, todayStr } from '../lib/dates.js'
+import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
+import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
+import { openWeighInSheet } from '../sheets/weighIn.js'
 
 /**
  * The tiles on the Trends grid. Each is a function of the data the screen
@@ -200,4 +203,139 @@ export function macrosTile({ week, targets, onPress }) {
     : notEnough(week)
 
   return trendTile({ id: 'macros', title: 'Macros', size: 'full', onPress }, body)
+}
+
+/* ---------------------------------------------------------------- weight */
+
+const SPARK_W = 120
+const SPARK_H = 40
+const SPARK_PAD = 3
+const SPARK_DAYS = 30
+
+/**
+ * The trend line over the last 30 days, and nothing else: no dots, no axis,
+ * no grid. A sparkline is a shape, not a reading, and the reading is the
+ * number beside it. Drawn only when the chart page would draw one, so the
+ * tile cannot show a trend the page then declines to.
+ */
+function sparkline(points) {
+  const ys = points.map((p) => p.trend).filter((v) => v != null)
+  if (ys.length < 2) return null
+  const min = Math.min(...ys)
+  const max = Math.max(...ys)
+  const span = max - min || 1
+  const coords = points
+    .map((p, i) => (p.trend == null ? null : [i, p.trend]))
+    .filter(Boolean)
+    .map(([i, v]) => [
+      SPARK_PAD + (i / (points.length - 1)) * (SPARK_W - 2 * SPARK_PAD),
+      SPARK_PAD + (1 - (v - min) / span) * (SPARK_H - 2 * SPARK_PAD),
+    ])
+  const last = coords[coords.length - 1]
+  return s(
+    'svg',
+    {
+      viewBox: `0 0 ${SPARK_W} ${SPARK_H}`,
+      width: SPARK_W,
+      height: SPARK_H,
+      class: 'shrink-0',
+      'aria-hidden': 'true',
+    },
+    s('polyline', {
+      points: coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' '),
+      fill: 'none',
+      stroke: 'var(--color-ink)',
+      'stroke-width': 2,
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    }),
+    s('circle', { cx: last[0].toFixed(1), cy: last[1].toFixed(1), r: 3, fill: 'var(--color-ink)' }),
+  )
+}
+
+/**
+ * Latest reading, the rate over the chart's default window, a sparkline, the
+ * last three weigh-ins and a button to add one. The button opens the same
+ * sheet the chart page uses, so there is one way to log a weight and it is
+ * reachable from the tile without leaving the grid.
+ *
+ * The rate and the line come with the chart's own gates: `ratePerWeek` is
+ * null under seven readings or a fortnight of span, and then the chip is
+ * simply absent rather than showing a dash. Under seven readings the sparkline
+ * goes too and its place says how many readings there are.
+ */
+export function weightTile({ weights, settings, onPress }) {
+  const unit = settings.weightUnit
+  const latest = weights[weights.length - 1] || null
+  const points = windowPoints(computeTrend(weights, settings.trendWindow), SPARK_DAYS)
+  const rate = ratePerWeek(points)
+  const readings = points.filter((p) => p.kg != null).length
+  const enough = weights.length >= MIN_ENTRIES_FOR_TREND
+
+  const logButton = h(
+    'button',
+    { class: 'btn-primary btn-compact', type: 'button', onclick: () => openWeighInSheet({ day: todayStr() }) },
+    'Log',
+  )
+
+  if (!latest) {
+    return trendTile(
+      { id: 'weight', title: 'Weight', size: 'full', onPress },
+      h(
+        'div',
+        { class: 'flex items-center justify-between gap-[10px]' },
+        caption('No weigh-ins yet. The trend appears after seven.'),
+        logButton,
+      ),
+    )
+  }
+
+  const chip =
+    rate == null
+      ? null
+      : h('span', { class: 'delta-chip tnum' }, `${signed(kgToUnit(rate, unit))} ${unit} / week`)
+
+  const spark = enough
+    ? sparkline(points)
+    : h(
+        'div',
+        { class: 'flex flex-col items-end text-right' },
+        tnum(`${readings} of ${MIN_ENTRIES_FOR_TREND}`, 'text-[16px] font-semibold'),
+        caption('weigh-ins'),
+      )
+
+  const row = (entry, i) =>
+    h(
+      'div',
+      { class: `flex items-center justify-between py-[8px] ${i ? 'hairline' : ''}` },
+      h('span', { class: 'text-[14px] text-muted' }, formatDayAge(entry.date)),
+      h(
+        'span',
+        { class: 'flex items-baseline gap-[3px]' },
+        tnum(fmtWeight(entry.kg, unit), 'text-[14px] font-semibold'),
+        h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+      ),
+    )
+
+  return trendTile(
+    { id: 'weight', title: 'Weight', size: 'full', onPress },
+    h(
+      'div',
+      { class: 'flex items-center justify-between gap-[10px]' },
+      h(
+        'div',
+        { class: 'flex min-w-0 flex-col gap-[6px]' },
+        h(
+          'div',
+          { class: 'flex items-baseline gap-[4px]' },
+          tnum(fmtWeight(latest.kg, unit), 'text-title font-semibold'),
+          h('span', { class: 'text-[14px] font-medium text-muted' }, unit),
+        ),
+        chip,
+      ),
+      spark,
+    ),
+    h('div', { class: 'flex flex-col' }, ...weights.slice(-3).reverse().map(row)),
+    h('div', { class: 'flex justify-end' }, logButton),
+  )
 }

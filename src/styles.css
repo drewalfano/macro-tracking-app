@@ -1373,6 +1373,33 @@
     opacity: 0.6;
   }
 
+  /**
+   * The rate chip on the Weight tile. Neutral by rule — no macro owns body
+   * weight — so it is ink at 8% behind ink, the quietest fill the palette has.
+   */
+  .delta-chip {
+    align-self: flex-start;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+    color: var(--color-ink);
+  }
+
+  /* A rule above a row inside a tile, where `.card`'s dividers do not reach. */
+  .hairline {
+    position: relative;
+  }
+  .hairline::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: var(--color-outline);
+  }
+
   /* -------------------------------------------------------------- day card */
 
   /**

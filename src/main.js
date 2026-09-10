@@ -16,6 +16,7 @@ import { todayStr } from './lib/dates.js'
 import { todayScreen } from './screens/today.js'
 import { openLogSheet } from './sheets/log.js'
 import { trendsScreen } from './screens/trends.js'
+import { weightScreen } from './screens/weight.js'
 import { settingsScreen } from './screens/settings.js'
 import { suggestTargetScreen } from './screens/suggestTarget.js'
 import {
@@ -362,7 +363,8 @@ function defineRoutes() {
    * existing. History's content is on Trends now, so both land in the right
    * place rather than on the router's catch-all.
    */
-  route('weight', () => navigate('trends', { replace: true }))
+  route('trends/weight', () => show(weightScreen))
+  route('weight', () => navigate('trends/weight', { replace: true }))
   route('history', () => navigate('trends', { replace: true }))
   route('settings', () => show(settingsScreen))
   /**
