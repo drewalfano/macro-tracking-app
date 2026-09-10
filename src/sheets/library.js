@@ -127,8 +127,9 @@ export function favouritesSheet() {
           h(
             'div',
             { class: 'flex flex-col gap-[10px]' },
-            rows.length ? h('div', { class: 'flex justify-end' }, chip) : null,
             box,
+            // Under the list, centred, where Edit tiles sits under the grid.
+            rows.length ? h('div', { class: 'flex justify-center' }, chip) : null,
           ),
           h(
             'p',
