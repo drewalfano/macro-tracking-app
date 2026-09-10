@@ -5,9 +5,12 @@ import { formatDayShort } from './dates.js'
 
 const W = 340
 const H = 150
-const TOP = 18 // room for the target label above its line
+const TOP = 10
 const BOTTOM = 18
-const RIGHT = 6
+// A gutter at the right for the target figure, so the label sits at the end
+// of its own line and never over a bar. It was above the line at the left,
+// and the first bars of the window drew straight through it.
+const RIGHT = 40
 
 /**
  * One bar per day against a dashed target line, for any span the pages
@@ -68,12 +71,12 @@ export function dayBars({ days, key, target, targets }) {
     target > 0
       ? [
           s('line', { x1: 0, x2: W - RIGHT, y1: y(target), y2: y(target), class: 'chart-mean' }),
-          // At the left, above the line, with a surface halo: the newest bars
-          // sit at the right and are the ones most likely to be at target.
+          // The figure alone, in the gutter, centred on the line. The word
+          // is in the caption above the chart, where there is room for it.
           s(
             'text',
-            { x: 0, y: y(target) - 4, 'text-anchor': 'start', class: 'chart-label chart-halo' },
-            `target ${Math.round(target)}`,
+            { x: W, y: y(target), dy: 4, 'text-anchor': 'end', class: 'chart-label' },
+            String(Math.round(target)),
           ),
         ]
       : []

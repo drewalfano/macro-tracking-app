@@ -44,7 +44,7 @@ export function macrosScreen() {
           h(
             'span',
             { class: 'text-[12px] leading-snug text-muted' },
-            `${g(settings.targets.protein)}g protein, last ${SPAN} days`,
+            `Last ${SPAN} days · target ${g(settings.targets.protein)}g`,
           ),
         ),
         dayBars({ days, key: 'protein', target: settings.targets.protein, targets: settings.targets }),

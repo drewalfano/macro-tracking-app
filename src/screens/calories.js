@@ -53,7 +53,7 @@ export function caloriesScreen() {
               h(
                 'span',
                 { class: 'text-[12px] leading-snug text-muted' },
-                `${full.length} full days of the last ${range}`,
+                `${full.length} full days of the last ${range} · target ${fmtKcal(target)}`,
               ),
             ),
             dayBars({ days: window, key: 'kcal', target, targets: settings.targets }),
