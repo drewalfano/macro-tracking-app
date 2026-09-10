@@ -1349,6 +1349,30 @@
     grid-column: span 2;
   }
 
+  /**
+   * The calorie bars' type. Values carry a halo in the tile's own surface so
+   * the digits stay readable where the mean line crosses them, which on a
+   * flat week is most of them.
+   */
+  .trend-tile .chart-label {
+    font-size: 11px;
+    fill: var(--color-muted);
+  }
+  .trend-tile .chart-value {
+    font-size: 11px;
+    fill: var(--color-ink);
+    paint-order: stroke fill;
+    stroke: var(--color-surface);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .trend-tile .chart-mean {
+    stroke: var(--color-ink);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    opacity: 0.6;
+  }
+
   /* -------------------------------------------------------------- day card */
 
   /**

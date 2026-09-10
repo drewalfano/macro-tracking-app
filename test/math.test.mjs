@@ -15,6 +15,7 @@ const T = await import(R + 'trend.js')
 const D = await import(R + 'dates.js')
 const G = await import(R + 'targets.js')
 const F = await import(R + 'format.js')
+const S = await import(R + 'streak.js')
 
 let pass = 0, fail = 0
 const eq = (label, got, want) => {
@@ -196,13 +197,13 @@ eq('block prefill: 17:00', D.blockForTime(new Date(2026, 0, 1, 17), { afternoon:
 const day = (kcal, protein) => ({ entries: [{}], totals: { kcal, protein } })
 const blank = () => ({ entries: [], totals: { kcal: 0, protein: 0 } })
 
-eq('one tracked day yields no average at all', C.weeklyAverages([day(1235, 90), blank(), blank()]), { tracked: 1, complete: 1, partial: 0, of: 7, enough: false, kcal: null, protein: null })
+eq('one tracked day yields no average at all', C.weeklyAverages([day(1235, 90), blank(), blank()]), { tracked: 1, complete: 1, partial: 0, of: 7, enough: false, kcal: null, protein: null, fat: null, carbs: null })
 eq('three is still not enough', C.weeklyAverages([day(2000, 150), day(2000, 150), day(2000, 150)]).enough, false)
 eq('four is', C.weeklyAverages(Array.from({ length: 4 }, () => day(2000, 150))).enough, true)
 eq('the mean divides by tracked days, not by seven', C.weeklyAverages([day(2000, 150), day(2400, 170), day(2000, 150), day(2400, 170), blank(), blank(), blank()]).kcal, 2200)
 eq('untracked days do not drag the mean toward zero', C.weeklyAverages(Array.from({ length: 5 }, () => day(2000, 150)).concat([blank(), blank()])).kcal, 2000)
 eq('only the last seven days count', C.weeklyAverages(Array.from({ length: 10 }, (_, i) => day(i < 7 ? 2000 : 9999, 150))).kcal, 2000)
-eq('nothing tracked is zero tracked, not a divide by zero', C.weeklyAverages([blank(), blank()]), { tracked: 0, complete: 0, partial: 0, of: 7, enough: false, kcal: null, protein: null })
+eq('nothing tracked is zero tracked, not a divide by zero', C.weeklyAverages([blank(), blank()]), { tracked: 0, complete: 0, partial: 0, of: 7, enough: false, kcal: null, protein: null, fat: null, carbs: null })
 
 /**
  * Partial days.
@@ -536,3 +537,19 @@ eq('no two rows start in the same place', new Set(shifts).size, shifts.length)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
+
+/* ----------------------------------------------------------------- streak */
+{
+  const T = { kcal: 2000, protein: 150, fat: 70, carbs: 250 }
+  const on = () => ({ entries: [{ block: 'morning' }, { block: 'night' }], totals: { kcal: 1900 } })
+  const off = () => ({ entries: [], totals: { kcal: 0 } })
+  const part = () => ({ entries: [{ block: 'morning' }], totals: { kcal: 400 } })
+  eq('no days is no streak', S.streak([], T), 0)
+  eq('three full days ending today', S.streak([on(), on(), on(), off()], T), 3)
+  eq('an unlogged today is skipped, not a miss', S.streak([off(), on(), on()], T), 2)
+  eq('an unlogged yesterday ends the run', S.streak([on(), off(), on(), on()], T), 1)
+  eq('a partial day ends the run', S.streak([on(), part(), on()], T), 1)
+  eq('consistency is over the window, not the days that exist', S.consistency([on(), on(), on()], T), { logged: 3, of: 30, pct: 10 })
+  eq('consistency ignores days past the window', S.consistency(Array.from({ length: 40 }, on), T).pct, 100)
+  eq('partial days do not count toward consistency', S.consistency([on(), part(), off()], T, 3), { logged: 1, of: 3, pct: 33 })
+}

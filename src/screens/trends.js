@@ -21,7 +21,6 @@ import {
   progress,
   weeklyAverages,
   isPartialDay,
-  AVERAGES_MIN_DAYS,
   MACRO_META,
 } from '../lib/compute.js'
 import {
@@ -50,6 +49,9 @@ import {
 import { formatDayLabel, formatDayAge, todayStr, addDays, daysBetween } from '../lib/dates.js'
 import { toast } from '../lib/toast.js'
 import { openWeighInSheet } from '../sheets/weighIn.js'
+import { trendsGrid } from '../lib/trendTile.js'
+import { streak, consistency } from '../lib/streak.js'
+import { caloriesTile, streakTile, consistencyTile, macrosTile } from './trendTiles.js'
 import { openLogSheet } from '../sheets/log.js'
 import { setDate } from '../state.js'
 
@@ -425,92 +427,6 @@ function macroTicks(totals, targets) {
 }
 
 /**
- * The weekly averages, or the reason there aren't any.
- *
- * Under the threshold this renders no mean at all. The caption that used to sit
- * beneath the figures was honest and lost anyway — it was 12px muted text under
- * a 30px semibold number, and the number lands first. Type hierarchy beats
- * copy, so the fix has to be structural rather than a better sentence.
- *
- * **Every figure states its denominator.** `weeklyAverages` drops partial days
- * from the mean — see `isPartialDay` — and an average whose basis the reader
- * cannot see is exactly as misleading as the corrupted one it replaced. So the
- * caption names the days counted and, when there are any, the days left out.
- */
-function averagesStrip(week, targets) {
-  /**
-   * The target gets its own line, held together.
-   *
-   * It used to ride on the caption as `average cal · target 2837`, and in a column
-   * this narrow that wrapped in the worst available place — after the word
-   * `target`, leaving the figure it names stranded on the line below. A label
-   * separated from its number by a line break is not a label.
-   *
-   * So the two facts are two lines, and the target line is `nowrap`: it is four
-   * characters and a word, it always fits, and it must never be broken again.
-   */
-  const figure = (value, caption, target) =>
-    h(
-      'div',
-      { class: 'flex min-w-0 flex-col' },
-      tnum(value, 'text-title font-semibold leading-tight'),
-      h('span', { class: 'text-[12px] leading-snug text-muted' }, caption),
-      target
-        ? h('span', { class: 'whitespace-nowrap text-[12px] leading-snug text-muted' }, target)
-        : null,
-    )
-
-  if (!week.enough) {
-    const remaining = AVERAGES_MIN_DAYS - week.complete
-    return h(
-      'div',
-      { class: 'day-card flex flex-col gap-[20px]' },
-      h('span', { class: 'section-label' }, 'Last 7 days'),
-      figure(`${week.complete} of ${week.of}`, 'full days logged'),
-      h(
-        'p',
-        { class: 'text-[12px] leading-snug text-muted' },
-        `Averages start at ${AVERAGES_MIN_DAYS} full days, with ${remaining} more to go. ` +
-          'An average of one day is just that day.',
-      ),
-    )
-  }
-
-  const basis =
-    week.partial > 0
-      ? `${week.complete} full days · ${week.partial} partial left out`
-      : `${week.complete} full days`
-
-  return h(
-    'div',
-    { class: 'day-card flex flex-col gap-[20px]' },
-    h(
-      'div',
-      { class: 'flex items-baseline justify-between gap-[10px]' },
-      h('span', { class: 'section-label' }, 'Last 7 days'),
-      h('span', { class: 'text-[12px] text-muted' }, basis),
-    ),
-    /**
-     * Two equal halves, not two content-width columns.
-     *
-     * It was a plain flex row, and that only looked balanced by accident: the
-     * captions used to wrap, and the wrapping was what pushed each column wide
-     * enough to fill the card. Stopping the wrap collapsed both to the width of
-     * their own text and left the pair huddled against the left edge with the
-     * right third empty. A grid says what the layout actually intends — two
-     * figures, equal weight, side by side — instead of depending on the text
-     * being too long to fit.
-     */
-    h(
-      'div',
-      { class: 'grid grid-cols-2 gap-[30px]' },
-      figure(kcal(week.kcal), 'average cal', `target ${kcal(targets.kcal)}`),
-      figure(g(week.protein), 'average protein', `target ${g(targets.protein)}`),
-    ),
-  )
-}
-
-/**
  * One day. Tapping it sets the shared date and opens the Log sheet over this
  * screen, which is now the route to an older day — the sheet stopped carrying
  * its own date controls, so this is where day browsing lives.
@@ -660,7 +576,12 @@ export function trendsScreen() {
           ? h(
               'div',
               { class: 'flex flex-col gap-[20px]' },
-              averagesStrip(week, settings.targets),
+              trendsGrid([
+                caloriesTile({ days, week, targets: settings.targets }),
+                streakTile(streak(days, settings.targets)),
+                consistencyTile(consistency(days, settings.targets)),
+                macrosTile({ week, targets: settings.targets }),
+              ]),
               card(days.map((day) => dayRow(day, settings.targets))),
             )
           : emptyState(
