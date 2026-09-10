@@ -1297,6 +1297,211 @@
     font-family: var(--font-rounded);
   }
 
+  /* ------------------------------------------------------------ trend tile */
+
+  /**
+   * A tile on the Trends grid. Same surface, radius and padding as `.day-card`,
+   * and a separate class because the day card carries `contain` and a tap
+   * treatment this box must not inherit — a tile's body is inert and only its
+   * header row is tappable. See `lib/trendTile.js`.
+   */
+  .trend-tile {
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+    padding: 20px;
+    min-width: 0;
+  }
+
+  /**
+   * Tile numerals sit at 700 where Today's hero sits at 600.
+   *
+   * At 48px in SF Pro Rounded the semibold reads a touch thin beside a 16px
+   * semibold title in the same box; the rounded face carries less ink at the
+   * same nominal weight than the text face does. Today keeps 600 because Today
+   * is the template and does not move on its own — if the two disagree on the
+   * phone, Today comes up, the tiles do not come down.
+   */
+  .trend-tile .tnum {
+    font-family: var(--font-rounded);
+  }
+  .trend-tile .text-display,
+  .trend-tile .text-title {
+    font-weight: 700;
+  }
+
+  button.trend-tile-head {
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    transition: opacity var(--dur-press) var(--ease-out);
+  }
+  button.trend-tile-head:active {
+    opacity: var(--press-dim);
+  }
+
+  .trends-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .trends-grid > [data-size='full'] {
+    grid-column: span 2;
+  }
+  /**
+   * A half tile is a square. One size, so a row of two is always level and
+   * a Small tile is the same object wherever it lands. `aspect-ratio` is a
+   * preferred height, not a cap: in edit mode the size picker adds a row and
+   * the tile grows to hold it rather than clipping.
+   */
+  .trends-grid > [data-size='half'] {
+    aspect-ratio: 1 / 1;
+  }
+  /**
+   * In a square the figure sits at the foot, title at the top, the way a
+   * small widget lays out. Top-aligned it left the bottom third of the tile
+   * empty, and a number floating under its title with air beneath reads as
+   * a box that has not filled yet. The last child takes the slack, which in
+   * edit mode leaves the size picker up with the title.
+   */
+  .trends-grid > [data-size='half'] > :last-child {
+    margin-top: auto;
+  }
+
+  /**
+   * The calorie bars' type. Values carry a halo in the tile's own surface so
+   * the digits stay readable where the mean line crosses them, which on a
+   * flat week is most of them.
+   */
+  .trend-tile .chart-label {
+    font-size: 11px;
+    fill: var(--color-muted);
+  }
+  .trend-tile .chart-value {
+    font-size: 11px;
+    fill: var(--color-ink);
+    paint-order: stroke fill;
+    stroke: var(--color-surface);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+  .trend-tile .chart-mean {
+    stroke: var(--color-ink);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+    opacity: 0.6;
+  }
+
+  /**
+   * The rate chip on the Weight tile. Neutral by rule — no macro owns body
+   * weight — so it is ink at 8% behind ink, the quietest fill the palette has.
+   */
+  .delta-chip {
+    align-self: flex-start;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+    color: var(--color-ink);
+  }
+
+  /* A rule above a row inside a tile, where `.card`'s dividers do not reach. */
+  .hairline {
+    position: relative;
+  }
+  .hairline::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: var(--color-outline);
+  }
+
+  /* ------------------------------------------------------ trends edit mode */
+
+  /* The tiles' offsetParent. reorder.js reads layout from offsetTop, which
+     is measured against this box, so it has to be positioned. */
+  .trends-grid {
+    position: relative;
+  }
+
+  .trend-tile {
+    transition:
+      scale var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+  .trend-tile.is-dragging {
+    z-index: 2;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+    scale: 1.03;
+    transition: none;
+  }
+
+  /* Editing: the body is inert and cannot be selected by a long press. */
+  .trends-grid[data-editing] .trend-tile > :not(.trend-tile-head, .variant-control) {
+    pointer-events: none;
+  }
+  .trends-grid[data-editing] .trend-tile {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* Apple's reorder control. `touch-action: none` is what lets a finger
+     on it drag the tile instead of scrolling the page. */
+  .grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: -12px -19px -12px 0;
+    border: 0;
+    background: none;
+    color: var(--color-muted);
+    touch-action: none;
+    cursor: grab;
+  }
+  .grip:active {
+    cursor: grabbing;
+  }
+
+  /* The size picker: a pill track at chip scale, the chosen size in ink. */
+  .variant-control {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  }
+  .variant-option {
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 6px 10px;
+    border-radius: 999px;
+    color: var(--color-muted);
+  }
+  /* On a half tile the picker spans the tile in equal segments. */
+  .trend-tile[data-size='half'] .variant-control {
+    display: flex;
+    width: 100%;
+  }
+  .trend-tile[data-size='half'] .variant-option {
+    flex: 1;
+    text-align: center;
+    padding-inline: 6px;
+  }
+  .variant-option[aria-checked='true'] {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
   /* -------------------------------------------------------------- day card */
 
   /**

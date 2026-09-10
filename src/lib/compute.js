@@ -204,6 +204,8 @@ export function weeklyAverages(days, targets, minDays = AVERAGES_MIN_DAYS) {
     enough,
     kcal: enough ? mean('kcal') : null,
     protein: enough ? mean('protein') : null,
+    fat: enough ? mean('fat') : null,
+    carbs: enough ? mean('carbs') : null,
   }
 }
 

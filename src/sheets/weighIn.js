@@ -1,6 +1,6 @@
 import { h, repaint } from '../lib/dom.js'
 import { openSheet } from '../lib/sheet.js'
-import { toast } from '../lib/toast.js'
+import { toast, openDialog } from '../lib/toast.js'
 import {
   getWeight,
   putWeight,
@@ -163,10 +163,20 @@ function dayPanel({ day: initialDay, unit }) {
   }
 }
 
-export async function openWeighInSheet() {
+/**
+ * `day` opens straight onto that day's editor, with no list underneath it.
+ *
+ * The Weight tile's Log button is a promise of one step, and the list is a
+ * step: a person who tapped Log already knows which day they mean. The editor
+ * is the same panel the list pushes, so what saves and how it says so is
+ * unchanged; `pop` on a lone panel is `history.back()`, which closes the sheet.
+ */
+export async function openWeighInSheet({ day = null } = {}) {
   const [settings, initial] = await Promise.all([getSettings(), listWeights()])
   const unit = settings.weightUnit
   let weights = initial
+
+  if (day) return openSheet(dayPanel({ day, unit }))
 
   return openSheet({
     title: 'Weigh-ins',
@@ -238,5 +248,91 @@ export async function openWeighInSheet() {
 
       return body
     },
+  })
+}
+
+/**
+ * Today's weight as one card: a field, a Save that becomes Update once the
+ * day has a value, and the line that says saving twice replaces rather than
+ * adds. It is the entry block the Weight page shows at its foot, and the
+ * whole of the sheet the Trends tile's Log button opens, so the two are one
+ * function rather than a card and its copy.
+ *
+ * `onSaved` is what differs: the page has nothing to do after a save because
+ * it is watching the store, the sheet closes.
+ */
+export function todayWeightCard({ unit, today, todayEntry, onSaved = null, bare = false }) {
+  let draft = todayEntry ? String(kgToUnit(todayEntry.kg, unit).toFixed(1)) : ''
+  const saveBtn = h(
+    'button',
+    {
+      class: 'btn-primary btn-compact',
+      disabled: !draft,
+      onclick: async () => {
+        const value = Number(draft)
+        if (!(value > 0)) return
+        await putWeight(today, unitToKg(value, unit))
+        toast(todayEntry ? 'Weight updated' : 'Weight saved')
+        onSaved?.()
+      },
+    },
+    todayEntry ? 'Update' : 'Save',
+  )
+
+  const input = numberInput({
+    value: draft,
+    suffix: unit,
+    placeholder: '—',
+    step: '0.1',
+    onInput: (v) => {
+      draft = v
+      saveBtn.disabled = !(Number(v) > 0)
+    },
+  })
+
+  /**
+   * `bare` is the dialog's form: the same field, button and hint with no
+   * card around them. The dialog box is already a surface with its own
+   * inset, and a white card inside a grey box was a container holding a
+   * container.
+   */
+  const body = (cls) =>
+    h(
+      'div',
+      { class: cls },
+      h(
+        'div',
+        { class: 'flex items-center gap-[10px]' },
+        h('div', { class: 'min-w-0 flex-1' }, input),
+        saveBtn,
+      ),
+      /**
+       * Shown whether or not today already has a value. The thing it answers
+       * is "what happens if I weigh myself twice today", and that question
+       * arrives BEFORE the first save, not after.
+       */
+      h(
+        'p',
+        { class: 'text-[12px] text-muted' },
+        'Saving again replaces today’s value rather than adding a second one.',
+      ),
+    )
+  // The plain 20 all round, which is what a card's inset is.
+  return bare ? body('flex flex-col gap-[10px]') : card(body('flex flex-col gap-[10px] px-[20px] py-[20px]'))
+}
+
+/**
+ * The Log button's dialog: today's card and nothing else, floating over
+ * the dimmed page. Not the list, not the day editor, not a sheet. A tap
+ * that said Log gets a field to type in and a button to press, and the
+ * card leaves on the save.
+ */
+export async function openTodayWeightDialog() {
+  const today = todayStr()
+  const [settings, todayEntry] = await Promise.all([getSettings(), getWeight(today)])
+  const unit = settings.weightUnit
+  return openDialog({
+    title: 'Today’s weight',
+    render: (close) => todayWeightCard({ unit, today, todayEntry, onSaved: close, bare: true }),
   })
 }

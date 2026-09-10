@@ -74,6 +74,13 @@ export const DEFAULT_SETTINGS = {
    * `calorieBlock` have always spoken.
    */
   cardMode: 'consumed',
+  /**
+   * The Trends grid as the person arranged it: tile ids in display order,
+   * and per tile which of its content variants to show. Unknown ids are
+   * dropped and missing ones appended at read time, so a tile added later
+   * appears without wiping the arrangement. See screens/trends.js.
+   */
+  trendsTiles: { order: [], variants: {} },
   /** Ordered and manual. These do not re-sort themselves — that is the point. */
   favourites: [],
   firstRunSeen: false,

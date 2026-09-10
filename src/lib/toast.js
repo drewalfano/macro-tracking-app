@@ -417,3 +417,88 @@ export function confirm(
     requestAnimationFrame(() => input?.focus())
   })
 }
+
+/**
+ * A floating card over the dimmed page, for a task with one field in it.
+ *
+ * The confirm dialog's surface, opened up: same scrim, same dim, same box on
+ * the same entrance, holding whatever `render` returns. A sheet is the
+ * app's surface for a task with a body — a list, a picker, a set of fields.
+ * Logging today's weight is one number and one button, and a sheet rising
+ * from the foot of the screen for that was a whole surface arriving for a
+ * question that fits in a card.
+ *
+ * **Centred in the VISIBLE viewport, not the layout one.** With the keyboard
+ * down the two are the same and the card sits dead centre. When the field
+ * is tapped the keyboard takes the lower half of the screen, the layout
+ * viewport does not change, and a card centred in it lands under the keys.
+ * So the scrim tracks `visualViewport` — its height and its offset — and
+ * the card centres in whatever is actually showing. The field is not
+ * focused on arrival: the card should be seen whole first, and a keyboard
+ * that rises with the dialog is the sheet's habit, not a card's.
+ * UNVERIFIED ON DEVICE.
+ *
+ * `render(close)` gets the function that dismisses the dialog, so a save
+ * can close it. Backdrop and Escape close it too.
+ */
+export function openDialog({ title, render }) {
+  const close = () => {
+    if (scrim.dataset.closing) return
+    scrim.dataset.closing = 'true'
+    setTimeout(() => scrim.remove(), 200)
+    document.removeEventListener('keydown', onKey)
+    vv?.removeEventListener('resize', follow)
+    vv?.removeEventListener('scroll', follow)
+  }
+  const onKey = (e) => {
+    if (e.key === 'Escape') close()
+  }
+
+  const dim = h('div', { class: 'sheet-dim confirm-dim', 'aria-hidden': 'true' })
+  const box = h(
+    'div',
+    {
+      class:
+        'confirm-in relative w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-label': title,
+    },
+    h(
+      'div',
+      { class: 'mb-[20px] flex items-center justify-between gap-[10px]' },
+      h('h2', { class: 'text-[20px] font-semibold' }, title),
+      h(
+        'button',
+        { class: 'icon-btn -my-[7px] -mr-[7px]', 'aria-label': 'Close', onclick: close },
+        icon('close', { size: 20, stroke: 2 }),
+      ),
+    ),
+    render(close),
+  )
+  const scrim = h(
+    'div',
+    {
+      class: 'sheet-scrim screen-cover z-[90] flex items-center justify-center px-[20px]',
+      onclick: (e) => {
+        if (!box.contains(e.target)) close()
+      },
+    },
+    dim,
+    box,
+  )
+
+  const vv = window.visualViewport
+  const follow = () => {
+    if (!vv) return
+    scrim.style.top = `${vv.offsetTop}px`
+    scrim.style.height = `${vv.height}px`
+  }
+  vv?.addEventListener('resize', follow)
+  vv?.addEventListener('scroll', follow)
+  follow()
+
+  document.body.appendChild(scrim)
+  document.addEventListener('keydown', onKey)
+  return { close }
+}

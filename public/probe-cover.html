@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- SAME as the app: the page paints under the status bar. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Probe: cover</title>
+    <style>
+      html, body { margin: 0; background: #141414; color: #fff; }
+      body { font: 500 17px/1.2 -apple-system, system-ui, sans-serif; }
+      /* No safe-area padding on purpose: rows are measured from the PHYSICAL top. */
+      .row { position: absolute; left: 12px; right: 12px; height: 0; border-top: 1px solid #444; }
+      .row span { position: absolute; top: 2px; left: 0; font-size: 15px; letter-spacing: .02em; }
+      .row b { position: absolute; top: 2px; right: 0; font-weight: 600; }
+      footer { position: absolute; top: 320px; left: 12px; right: 12px; font-size: 13px; color: #999; line-height: 1.5; }
+      a { color: #6aa9ff; }
+    </style>
+  </head>
+  <body>
+    <div id="rows"></div>
+    <footer>
+      <div id="readout"></div>
+      <p>This page has <code>viewport-fit=cover</code>, like the app.<br />
+      Compare with <a href="./probe-safe.html">probe-safe.html</a> (no cover).</p>
+    </footer>
+    <script>
+      const rows = document.getElementById('rows')
+      for (let y = 0; y <= 300; y += 20) {
+        const d = document.createElement('div')
+        d.className = 'row'
+        d.style.top = y + 'px'
+        d.innerHTML = '<span>' + y + 'pt — Trackd Aa Bb 0123</span><b>' + y + '</b>'
+        rows.appendChild(d)
+      }
+      const probe = document.createElement('div')
+      probe.style.cssText = 'position:fixed;top:0;height:env(safe-area-inset-top,0px);width:1px;'
+      document.body.appendChild(probe)
+      document.getElementById('readout').textContent =
+        'safe-area-inset-top: ' + probe.getBoundingClientRect().height + 'pt · ' +
+        'innerHeight: ' + innerHeight + ' · dpr: ' + devicePixelRatio +
+        ' · standalone: ' + (navigator.standalone === true)
+    </script>
+  </body>
+</html>
