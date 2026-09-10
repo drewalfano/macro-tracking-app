@@ -428,10 +428,15 @@ export function confirm(
  * from the foot of the screen for that was a whole surface arriving for a
  * question that fits in a card.
  *
- * **The box sits high, not centred.** On the phone this runs on the number
- * keyboard takes the lower half of the screen the moment the field takes
- * focus, and a box centred in the layout viewport lands under it. Anchored
- * at the top it stays in view with the keyboard up. UNVERIFIED ON DEVICE.
+ * **Centred in the VISIBLE viewport, not the layout one.** With the keyboard
+ * down the two are the same and the card sits dead centre. When the field
+ * is tapped the keyboard takes the lower half of the screen, the layout
+ * viewport does not change, and a card centred in it lands under the keys.
+ * So the scrim tracks `visualViewport` — its height and its offset — and
+ * the card centres in whatever is actually showing. The field is not
+ * focused on arrival: the card should be seen whole first, and a keyboard
+ * that rises with the dialog is the sheet's habit, not a card's.
+ * UNVERIFIED ON DEVICE.
  *
  * `render(close)` gets the function that dismisses the dialog, so a save
  * can close it. Backdrop and Escape close it too.
@@ -442,6 +447,8 @@ export function openDialog({ title, render }) {
     scrim.dataset.closing = 'true'
     setTimeout(() => scrim.remove(), 200)
     document.removeEventListener('keydown', onKey)
+    vv?.removeEventListener('resize', follow)
+    vv?.removeEventListener('scroll', follow)
   }
   const onKey = (e) => {
     if (e.key === 'Escape') close()
@@ -472,8 +479,7 @@ export function openDialog({ title, render }) {
   const scrim = h(
     'div',
     {
-      class:
-        'sheet-scrim screen-cover z-[90] flex items-start justify-center px-[20px] pt-[calc(env(safe-area-inset-top,0px)+96px)]',
+      class: 'sheet-scrim screen-cover z-[90] flex items-center justify-center px-[20px]',
       onclick: (e) => {
         if (!box.contains(e.target)) close()
       },
@@ -481,10 +487,18 @@ export function openDialog({ title, render }) {
     dim,
     box,
   )
+
+  const vv = window.visualViewport
+  const follow = () => {
+    if (!vv) return
+    scrim.style.top = `${vv.offsetTop}px`
+    scrim.style.height = `${vv.height}px`
+  }
+  vv?.addEventListener('resize', follow)
+  vv?.addEventListener('scroll', follow)
+  follow()
+
   document.body.appendChild(scrim)
   document.addEventListener('keydown', onKey)
-  // The field is the point of the dialog, so it takes focus on arrival and
-  // the keyboard comes with it.
-  requestAnimationFrame(() => box.querySelector('input')?.focus())
   return { close }
 }
