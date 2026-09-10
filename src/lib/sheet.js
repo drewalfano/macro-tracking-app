@@ -718,6 +718,16 @@ export function openSheet({ title, render, footer = null, action = null }) {
         entry.actionNode = node
         syncHeader()
       },
+      /**
+       * The software keyboard, for a panel that lays itself out differently
+       * while it is up. `keyboardOpen` reads the state; `onKeyboard` is called
+       * with it whenever it changes, and is released with the panel.
+       */
+      onKeyboard: (fn) => {
+        keyboardListeners.add(fn)
+        entry.disposers.push(() => keyboardListeners.delete(fn))
+      },
+      keyboardOpen: () => keyboardOpen,
       /** Re-run this panel's render in place, e.g. after a data change. */
       refresh: () => {
         runDisposers(entry)
@@ -999,6 +1009,18 @@ export function openSheet({ title, render, footer = null, action = null }) {
    */
   const vv = window.visualViewport
   let keyboardInset = 0
+  /**
+   * Whether the keyboard is up, and who wants to know.
+   *
+   * The geometry above is the sheet's own business, but a panel can have
+   * something to say about it — the describe panel moves its primary button up
+   * against the field while the keys are covering half the sheet. So the state
+   * is published rather than kept: `ctx.keyboardOpen()` for a panel asking now,
+   * `ctx.onKeyboard` for one that wants telling. Listeners are dropped with the
+   * panel that registered them.
+   */
+  let keyboardOpen = false
+  const keyboardListeners = new Set()
   function syncKeyboard() {
     if (!vv || destroyed) return
     const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
@@ -1008,6 +1030,16 @@ export function openSheet({ title, render, footer = null, action = null }) {
     panel.style.setProperty('--kb-inset', `${inset}px`)
     void panel.offsetHeight
     panel.style.transition = ''
+    const open = inset > 0
+    if (open === keyboardOpen) return
+    keyboardOpen = open
+    for (const fn of keyboardListeners) {
+      try {
+        fn(open)
+      } catch (err) {
+        console.warn('Sheet keyboard listener failed', err)
+      }
+    }
   }
   if (vv) {
     vv.addEventListener('resize', syncKeyboard)

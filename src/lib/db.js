@@ -823,6 +823,34 @@ export async function entriesInRange(from, to) {
   return (await db()).getAllFromIndex('entries', 'date', IDBKeyRange.bound(from, to))
 }
 
+/**
+ * Which days between two dates have anything logged on them, as a Set of
+ * date strings.
+ *
+ * The calendar marks them, and it only needs the days — not the rows. So this
+ * walks the `date` index by KEY and skips a whole day in one step: dates are
+ * `YYYY-MM-DD` strings, so continuing past `key + '\uffff'` lands on the first
+ * key greater than every duplicate of the day just read. A month of a hundred
+ * entries costs about thirty reads rather than a hundred, and none of them
+ * fetch a row.
+ *
+ * `settled` for the same reason `entriesInRange` needs it: a row logged a
+ * moment ago is in the write queue, and a calendar that leaves today unmarked
+ * until the queue drains would be wrong about the one day most likely to be
+ * looked at.
+ */
+export async function loggedDatesInRange(from, to) {
+  await settled()
+  const days = new Set()
+  const index = (await db()).transaction('entries').store.index('date')
+  let cursor = await index.openKeyCursor(IDBKeyRange.bound(from, to))
+  while (cursor) {
+    days.add(cursor.key)
+    cursor = await cursor.continue(`${cursor.key}\uffff`)
+  }
+  return days
+}
+
 export async function getEntry(id) {
   await settled()
   return (await db()).get('entries', id)

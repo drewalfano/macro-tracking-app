@@ -3,29 +3,29 @@ import { getAiKey } from './aiKey.js'
 /**
  * The model call, and the only file in the app that knows which model.
  *
- * Everything above this boundary speaks in `{spans, unresolved}` going in and a
- * plain array of items coming out. The endpoint, the auth header, the request
- * envelope and the response shape are all in here, so changing provider is a
+ * Two calls share everything below the prompt. `describeMeal` reads a WHOLE
+ * description and returns the foods in it, brands and modifications intact —
+ * it is how the Describe sheet decides what the items are, before anything is
+ * looked up. `describeLeftovers` is the older, narrower job the plate still
+ * uses: finish the fragments a local read could not. Both speak in plain
+ * arrays of items coming out. The endpoint, the auth header, the request
+ * envelope and the response shapes are all in here, so changing provider is a
  * change to this file and nothing else.
  *
- * **One call, and it happens after resolution rather than before it.** The
- * spec left this open — estimate in a second call, or estimate in the first and
- * use it only as a fallback. On the on-request design the question resolves
- * itself: the call fires only once the library, the staples table and Open Food
- * Facts have all already failed, so there is nothing left for a second round
- * trip to check. Asking for the estimate in the same call as the split costs
- * tokens that are already being spent and saves a whole extra request.
+ * **Interpretation and estimation ride in one request, and are used apart.**
+ * Every item the model names is put through the app's own lookup on the way
+ * out — the library, the staples table, Open Food Facts — and the estimate it
+ * came with is consulted only where that lookup finds nothing. Asking for the
+ * estimate in the same call as the reading costs tokens that are already
+ * being spent and saves a whole extra round trip; using it only as a fallback
+ * is what keeps spec 9.3 true: a food that exists never takes an estimated
+ * value.
  *
- * What comes back is still treated as a fallback, never as an answer. Anything
- * the model names is put through resolution again on the way out — a dish it
- * splits out of a compound name may well exist in the library — and an estimate
- * is used only where that second pass also finds nothing. Spec 9.3 holds:
- * resolution before estimation, always.
- *
- * **What leaves the device is exactly the two lists passed in.** No date, no
- * targets, no profile, no library contents, and none of the items the rules
- * already placed. There is no logging, no proxy and no second recipient. The
- * key is read here and travels in the header of this one request.
+ * **What leaves the device is exactly the text passed in.** For `describeMeal`
+ * that is the description as typed; for `describeLeftovers` it is the two
+ * lists of fragments. No date, no targets, no profile, no library contents.
+ * There is no logging, no proxy and no second recipient. The key is read here
+ * and travels in the header of this one request.
  */
 
 const HOST = 'https://generativelanguage.googleapis.com'
@@ -110,6 +110,75 @@ const RESPONSE_SCHEMA = {
     },
   },
   required: ['items'],
+}
+
+/**
+ * The shape of a whole-meal reading.
+ *
+ * `modifiers` is the field that fixes the latte problem: "with oat milk and no
+ * sugar" is not two more foods, it is two facts about the one drink, and the
+ * only way to keep the model from returning them as rows is to give them a
+ * place of their own. `brand` is kept apart from `name` so the lookup can
+ * tell a branded product from a generic food and refuse to match the first to
+ * the second.
+ */
+const MEAL_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    items: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING' },
+          brand: { type: 'STRING', nullable: true },
+          quantity: { type: 'NUMBER', nullable: true },
+          unit: { type: 'STRING', enum: ['g', 'ml', 'serving'] },
+          modifiers: { type: 'ARRAY', items: { type: 'STRING' } },
+          packaged: { type: 'BOOLEAN' },
+          kcal: { type: 'NUMBER', nullable: true },
+          protein: { type: 'NUMBER', nullable: true },
+          fat: { type: 'NUMBER', nullable: true },
+          carbs: { type: 'NUMBER', nullable: true },
+        },
+        required: ['name', 'brand', 'quantity', 'unit', 'modifiers', 'packaged', 'kcal', 'protein', 'fat', 'carbs'],
+      },
+    },
+  },
+  required: ['items'],
+}
+
+/**
+ * The whole-meal prompt.
+ *
+ * The description goes in untouched. The rules parser used to split it first
+ * and send only the pieces it could not place, and that is how "Tim Hortons
+ * spinach & egg white bites" became two rows: the split happened before
+ * anything that knows what a product name looks like had seen the words. So
+ * the split is now the model's job, and the prompt spends most of its words
+ * on the one thing the rules got wrong — that "and", "&" and commas are more
+ * often inside a name or a modification than between two foods.
+ */
+function buildMealPrompt(text) {
+  return `Someone typed what they ate into a food logging app. Read the whole description and return one entry per distinct food or drink in it.
+
+Description:
+${text}
+
+For every entry return:
+- name: the food or product as it would be written on a menu or a package, with the brand in front where one was named — "Tim Hortons Spinach & Egg White Bites", "Starbucks Caffè Latte", "scrambled eggs". Keep every word of a product name that was written, in the order it was written. No quantity words in the name.
+- brand: the brand, chain or restaurant that was named, or null.
+- quantity and unit: unit is exactly "g", "ml" or "serving". Use "serving" when the amount is a count or a portion rather than a weight, and keep whatever amount was written. Use 1 when no amount was written and the food is a single thing; null only when the amount is genuinely unknowable.
+- modifiers: how it was customised — milk choice, size, syrups, "no sugar", "extra shot", "no cheese" — as short phrases, in the order written. Empty when there are none.
+- packaged: true for a branded or packaged product or a chain menu item, false for a homemade or generic food.
+- kcal, protein, fat, carbs: your best estimate of the TOTAL for that quantity with its modifiers, not per 100 g. Macros in grams.
+
+Rules:
+- "and", "&" and commas are often part of one product's name ("spinach & egg white bites", "mac and cheese", "salt and vinegar crisps") or join a modification to the thing it changes ("a latte with oat milk and no sugar"). Split only where the words clearly name a second food or drink.
+- A modification is never its own entry. It belongs to the food or drink it changes.
+- Return only foods that were written. Do not add dressings, sides, drinks or garnishes that were not written, however likely they are.
+- If part of the description means nothing you can identify, return it as one entry with those words as the name and null for quantity and all four macros. Do not guess.
+- If nothing in the description is a food or drink, return an empty list.`
 }
 
 /**
@@ -285,6 +354,118 @@ async function callAnyModel(body, { signal }) {
 
 const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
+/** The four numbers, or null when the model admitted it could not say. */
+function readEstimate(raw) {
+  if (number(raw.kcal) == null) return null
+  return {
+    kcal: number(raw.kcal) ?? 0,
+    protein: number(raw.protein) ?? 0,
+    fat: number(raw.fat) ?? 0,
+    carbs: number(raw.carbs) ?? 0,
+  }
+}
+
+/**
+ * The reply's text, as JSON, or a `DescribeError` that says which of the two
+ * ways it can fail to be that. Shared by both calls.
+ */
+function readReply(data) {
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!text) throw new DescribeError('Gemini returned nothing to read.')
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new DescribeError('Gemini returned something unreadable.')
+  }
+}
+
+/**
+ * One request with one retry, and only for the thing a retry can fix.
+ *
+ * This used to retry on ANY failure, which meant a 404 — an answer that will
+ * be identical every time — fired a second request behind a 700ms wait. On a
+ * free tier metered per minute that is how one tap becomes two requests and
+ * a handful of taps becomes a rate limit, which is exactly what happened on
+ * the first real device: a 404 that could never succeed, quietly doubled,
+ * until the next error to arrive was a 429 blaming the wrong thing.
+ *
+ * Model availability is handled inside `callAnyModel` rather than here, so
+ * what is left is the genuine transient: a dropped connection.
+ */
+async function request(prompt, schema, { signal }) {
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: schema,
+      // Deterministic on purpose: the same sentence should not produce a
+      // different plate depending on when it was sent.
+      temperature: 0,
+    },
+  }
+  try {
+    return await callAnyModel(body, { signal })
+  } catch (err) {
+    if (err.name === 'AbortError' || err instanceof DescribeError) throw err
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    return callAnyModel(body, { signal })
+  }
+}
+
+/**
+ * A whole-meal reply, checked field by field.
+ *
+ * Exported for the tests, and pure on purpose: the sheet's behaviour on a
+ * reply that keeps "spinach & egg white bites" whole, or that hands back the
+ * latte's milk as a modifier rather than a row, is decided here and nowhere
+ * else. Anything without a usable name is dropped rather than shown as an
+ * empty row, and a name that is only the brand is left as it came — the
+ * lookup will fail on it honestly rather than this file inventing a food.
+ *
+ * @param {unknown} parsed  the reply, already JSON
+ * @returns {Array<{name, brand, quantity, unit, modifiers, packaged, estimate}>}
+ */
+export function normalizeMealReply(parsed) {
+  const items = Array.isArray(parsed?.items) ? parsed.items : []
+  return items
+    .filter((raw) => raw && typeof raw.name === 'string' && raw.name.trim())
+    .map((raw) => ({
+      name: raw.name.trim().replace(/\s+/g, ' '),
+      brand: typeof raw.brand === 'string' && raw.brand.trim() ? raw.brand.trim() : null,
+      quantity: number(raw.quantity),
+      unit: ['g', 'ml', 'serving'].includes(raw.unit) ? raw.unit : 'serving',
+      modifiers: Array.isArray(raw.modifiers)
+        ? raw.modifiers.filter((m) => typeof m === 'string' && m.trim()).map((m) => m.trim())
+        : [],
+      packaged: raw.packaged === true,
+      /**
+       * Kept apart from the item rather than spread onto it, so that nothing
+       * downstream can use these by accident. They are consulted only where
+       * the lookup has already come back empty.
+       */
+      estimate: readEstimate(raw),
+    }))
+}
+
+/**
+ * Read a whole description into its foods.
+ *
+ * What leaves the device is the description and nothing else. No date, no
+ * targets, no profile, no library contents. The reply is a list of foods with
+ * their brands, amounts and modifications, plus an estimate per food that is
+ * only ever used where the app's own sources have nothing.
+ *
+ * @param {{text: string, signal?: AbortSignal}} input
+ * @returns {Promise<ReturnType<typeof normalizeMealReply>>}
+ */
+export async function describeMeal({ text, signal } = {}) {
+  const description = String(text || '').trim()
+  if (!description) return []
+  const data = await request(buildMealPrompt(description), MEAL_SCHEMA, { signal })
+  return normalizeMealReply(readReply(data))
+}
+
 /**
  * Ask the model to finish what the rules would not.
  *
@@ -294,50 +475,8 @@ const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 export async function describeLeftovers({ spans = [], unresolved = [], signal } = {}) {
   if (!spans.length && !unresolved.length) return []
 
-  const body = {
-    contents: [{ role: 'user', parts: [{ text: buildPrompt({ spans, unresolved }) }] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      responseSchema: RESPONSE_SCHEMA,
-      // Deterministic on purpose: the same sentence should not produce a
-      // different plate depending on when it was sent.
-      temperature: 0,
-    },
-  }
-
-  /**
-   * One retry, and only for the thing a retry can fix.
-   *
-   * This used to retry on ANY failure, which meant a 404 — an answer that will
-   * be identical every time — fired a second request behind a 700ms wait. On a
-   * free tier metered per minute that is how one tap becomes two requests and
-   * a handful of taps becomes a rate limit, which is exactly what happened on
-   * the first real device: a 404 that could never succeed, quietly doubled,
-   * until the next error to arrive was a 429 blaming the wrong thing.
-   *
-   * Model availability is handled inside `callAnyModel` rather than here, so
-   * what is left is the genuine transient: a dropped connection.
-   */
-  let data
-  try {
-    data = await callAnyModel(body, { signal })
-  } catch (err) {
-    if (err.name === 'AbortError' || err instanceof DescribeError) throw err
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    data = await callAnyModel(body, { signal })
-  }
-
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) throw new DescribeError('Gemini returned nothing to read.')
-
-  let parsed
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    throw new DescribeError('Gemini returned something unreadable.')
-  }
-
+  const data = await request(buildPrompt({ spans, unresolved }), RESPONSE_SCHEMA, { signal })
+  const parsed = readReply(data)
   const items = Array.isArray(parsed?.items) ? parsed.items : []
 
   return items
@@ -347,19 +486,6 @@ export async function describeLeftovers({ spans = [], unresolved = [], signal } 
       quantity: number(raw.quantity),
       unit: ['g', 'ml', 'serving'].includes(raw.unit) ? raw.unit : 'serving',
       packaged: raw.packaged === true,
-      /**
-       * Kept apart from the item rather than spread onto it, so that nothing
-       * downstream can use these by accident. They are consulted only where
-       * resolution has already come back empty.
-       */
-      estimate:
-        number(raw.kcal) == null
-          ? null
-          : {
-              kcal: number(raw.kcal) ?? 0,
-              protein: number(raw.protein) ?? 0,
-              fat: number(raw.fat) ?? 0,
-              carbs: number(raw.carbs) ?? 0,
-            },
+      estimate: readEstimate(raw),
     }))
 }

@@ -365,6 +365,36 @@ function readQuantity(fragment) {
   }
 }
 
+/**
+ * How much the split in front of a fragment can be trusted.
+ *
+ * `start` is the first fragment, which was never split from anything. `strong`
+ * is a fragment that opens the way a new item opens — "a latte", "2 eggs",
+ * "the scone" — so the person announced it as a new thing whatever separator
+ * sat in front of it. `weak` is everything else: a fragment that exists only
+ * because an "and", an "&", a "plus" or a comma sat in the sentence, which is
+ * exactly where a product name ("spinach & egg white bites", "mac and cheese")
+ * or a modification ("with oat milk and no sugar") gets cut in two. The rules
+ * cannot tell those from two foods, so they say so rather than pick.
+ */
+function boundaryOf(fragment, index) {
+  if (index === 0) return 'start'
+  return OPENS_ITEM.test(fragment.text) ? 'strong' : 'weak'
+}
+
+/**
+ * The whole description read as one item, quantity and all.
+ *
+ * For the fallback that refuses to split: "2 Tim Hortons spinach & egg white
+ * bites" is two of one thing, and the row that preserves the description
+ * should still carry the two.
+ */
+export function readWhole(input) {
+  const text = stripPreamble(String(input || ''))
+  if (!text) return null
+  return { kind: 'item', text, boundary: 'start', ...readQuantity(text) }
+}
+
 /* ------------------------------------------------------------------ parse */
 
 /**
@@ -427,21 +457,30 @@ export function parseDescription(input) {
     (f, i) => i === 0 || f.sep === 'and' || OPENS_ITEM.test(f.text)
   )
 
+  /**
+   * How sure the split in front of each part is. See `boundaryOf`: a part
+   * that opens with a determiner or a number announced itself, and one that
+   * was split off only because an "and" or an "&" sat in front of it did not.
+   * `interpretLocally` reads this to decide whether the split can stand on
+   * its own or has to be confirmed.
+   */
   const parts = []
   let i = 0
   while (i < fragments.length) {
     let j = i + 1
     while (j < fragments.length && !opens[j]) j++
 
+    const boundary = boundaryOf(fragments[i], i)
     if (j > i + 1) {
       parts.push({
         kind: 'span',
         text: fragments.slice(i, j).map((f) => f.text).join(', '),
         reason: 'ambiguous-boundary',
+        boundary: 'weak',
       })
     } else {
       const text = fragments[i].text
-      parts.push({ kind: 'item', text, ...readQuantity(text) })
+      parts.push({ kind: 'item', text, boundary, ...readQuantity(text) })
     }
     i = j
   }

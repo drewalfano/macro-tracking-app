@@ -1818,10 +1818,15 @@
       transform var(--dur-press) var(--ease-out),
       opacity var(--dur-press) ease-out;
   }
-  .chip-sm:active,
-  .chip-sm[data-pressed='true'] {
+  .chip-sm:active:not(:disabled),
+  .chip-sm[data-pressed='true']:not(:disabled) {
     transform: scale(var(--press-scale-sm));
     opacity: var(--press-dim);
+  }
+  /* The same dim `.icon-btn` takes: a chip that cannot be pressed yet is
+     still the chip it will be, only quieter. */
+  .chip-sm:disabled {
+    opacity: 0.3;
   }
 
   /**
@@ -2040,6 +2045,7 @@
    * instead of inverting into a tall pill.
    */
   .cal-day {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2061,6 +2067,41 @@
      note on `monthCells` — but not what this month is about. */
   .cal-day[data-outside='true'] {
     color: var(--color-muted);
+  }
+
+  /**
+   * A day with something logged on it.
+   *
+   * The green is `--color-kcal`, the calories colour, because that is what the
+   * dot is about: a day with food on it. It is the one mark in the calendar
+   * that is not the shape of the cell — today's ring and the selected fill both
+   * are — so it can be small and still be the first thing seen, and it sits
+   * under the number rather than beside it so the digits stay centred in a
+   * column of digits.
+   *
+   * 5px, not the 6 the first pass used: at 6 with the number above it the cell
+   * reads as two things stacked, and the mark stops being an annotation on the
+   * day. Bottom-anchored in the cell rather than offset from the type, so it
+   * lands on the same line in every row whatever the digit above it is.
+   *
+   * On the selected day the ground is ink and the green would sit at 2.6:1 on
+   * it, so the dot takes the canvas colour there — the same swap the number
+   * itself makes, for the same reason.
+   */
+  .cal-day[data-logged='true']::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    margin-left: -2.5px;
+    border-radius: 999px;
+    background: var(--color-kcal);
+  }
+
+  .cal-day[data-logged='true'][aria-pressed='true']::after {
+    background: var(--color-canvas);
   }
 
   .cal-day[data-today='true'] {
@@ -3615,6 +3656,46 @@
   .sparkle-wait > svg:last-child {
     transform-origin: 75% 75%;
     animation: sparkle-small 1250ms var(--ease-loop) -580ms infinite;
+  }
+
+  /* ------------------------------------------------------ the lookup ring */
+
+  /**
+   * The mark that says a row is being looked up.
+   *
+   * A ring, not the sparkle. The sparkle means a MODEL is being waited on,
+   * and the note above says why it should never be read as progress. This is
+   * a different wait for a different thing — the library, the staples table,
+   * Open Food Facts — and it sits on the row it is about, in the slot the
+   * chevron takes once the row has settled. Giving a database lookup the
+   * model's mark would put a sparkle on every row of a meal that never went
+   * near a model, which is the repeated branding the review was cleared of.
+   *
+   * Drawn from the app's own two strokes: the track is the outline tone, the
+   * arc is ink, and the width is the icon stroke. 18px, the chevron's size,
+   * so the row does not change height when one replaces the other.
+   *
+   * The blanket reduced-motion rule at the foot of this file parks it: an arc
+   * that does not turn still reads as "not finished", which is all it claims.
+   */
+  @keyframes spinner-turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 1.75px solid var(--color-outline);
+    border-top-color: var(--color-ink);
+    animation: spinner-turn 900ms linear infinite;
+  }
+  .spinner-sm {
+    width: 14px;
+    height: 14px;
+    border-width: 1.5px;
   }
 }
 
