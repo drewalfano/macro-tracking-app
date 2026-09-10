@@ -466,9 +466,12 @@ export async function pushServing(ctx, { food, date, block, onStage }) {
       settings,
       initial: { ...defaultServing(food), date, block },
       onSubmit: async ({ quantity, unit, block: b, date: d }) => {
-        await logFood({ food, quantity, unit, date: d, block: b })
+        const entry = await logFood({ food, quantity, unit, date: d, block: b })
         ctx.close()
-        toast(`Logged ${displayName(food.name)}`)
+        toast(`Logged ${displayName(food.name)}`, {
+          action: 'Undo',
+          onAction: () => deleteEntry(entry.id),
+        })
       },
       onStage:
         onStage &&
@@ -485,9 +488,12 @@ export async function openServingSheet({ food, date, block }) {
     settings,
     initial: { ...defaultServing(food), date, block },
     onSubmit: async ({ quantity, unit, block: b, date: d }) => {
-      await logFood({ food, quantity, unit, date: d, block: b })
+      const entry = await logFood({ food, quantity, unit, date: d, block: b })
       closeCurrent()
-      toast(`Logged ${displayName(food.name)}`)
+      toast(`Logged ${displayName(food.name)}`, {
+        action: 'Undo',
+        onAction: () => deleteEntry(entry.id),
+      })
     },
   })
   let closeCurrent = () => {}
