@@ -76,7 +76,9 @@ export function favouritesSheet() {
             : h(
                 'button',
                 {
-                  class: 'icon-btn bg-canvas',
+                  // The quick add tile's plus, at the same size: one small
+                  // circle for one action on a row.
+                  class: 'icon-btn icon-btn-sm shrink-0 bg-canvas',
                   'aria-label': 'Unpin',
                   onclick: async () => {
                     await toggleFavourite(fav.type, fav.id)
