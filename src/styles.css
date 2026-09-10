@@ -1297,6 +1297,58 @@
     font-family: var(--font-rounded);
   }
 
+  /* ------------------------------------------------------------ trend tile */
+
+  /**
+   * A tile on the Trends grid. Same surface, radius and padding as `.day-card`,
+   * and a separate class because the day card carries `contain` and a tap
+   * treatment this box must not inherit — a tile's body is inert and only its
+   * header row is tappable. See `lib/trendTile.js`.
+   */
+  .trend-tile {
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+    padding: 20px;
+    min-width: 0;
+  }
+
+  /**
+   * Tile numerals sit at 700 where Today's hero sits at 600.
+   *
+   * At 48px in SF Pro Rounded the semibold reads a touch thin beside a 16px
+   * semibold title in the same box; the rounded face carries less ink at the
+   * same nominal weight than the text face does. Today keeps 600 because Today
+   * is the template and does not move on its own — if the two disagree on the
+   * phone, Today comes up, the tiles do not come down.
+   */
+  .trend-tile .tnum {
+    font-family: var(--font-rounded);
+  }
+  .trend-tile .text-display,
+  .trend-tile .text-title {
+    font-weight: 700;
+  }
+
+  button.trend-tile-head {
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    transition: opacity var(--dur-press) var(--ease-out);
+  }
+  button.trend-tile-head:active {
+    opacity: var(--press-dim);
+  }
+
+  .trends-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .trends-grid > [data-size='full'] {
+    grid-column: span 2;
+  }
+
   /* -------------------------------------------------------------- day card */
 
   /**
